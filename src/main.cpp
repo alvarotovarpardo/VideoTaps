@@ -90,7 +90,7 @@ int main() {
     uchar* outputArray = new uchar[rows * cols];
     memset(outputArray, 0, rows * cols);
     
-    const string tapType = "2X"; 
+    const string tapType = "2X2"; 
     
     applyTap(inputArray, outputArray, rows, cols, tapType);
     
