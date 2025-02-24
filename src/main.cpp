@@ -36,29 +36,44 @@ tuple<int, int, char> readTap(const string& tapType) {
     return {R, T, L};
 }
 
-Mat applyTap(Mat& img, const string& tapType){
+void applyTap(const uchar* input, uchar* output, int rows, int cols, const string& tapType){
     auto [R, T, L] = readTap(tapType);
     
     cout << "[R, T, L] = [" << R << ", " << T << ", " << (L ? string(1, L) : "None") << "]\n";
     cout << "applying taps...\n";
 
-    Mat reconstructed = Mat::zeros(img.size(), img.type());
-    int segmentWidth = img.cols / R;
+    
+    int segmentWidth = cols / R;
 
-    for (int row = 0; row < img.rows; row++){
+
+/*
+for (int row = 0; row < img.rows; row++){
+        for (int col = 0; col < segmentWidth; col++){
+            for (int t = 0; t < T; t++){    
+                for (int r = 0; r < R; r++){
+                    int destCol = (1 + r + t)*col;
+                    reconstructed.at<uchar>(row,destCol) = img.at<uchar>(row,destCol);
+                }
+            }
+        }
+    }
+*/
+
+
+    for (int row = 0; row < rows; row++){
         for (int r = 0; r < R; r++){
             for (int t = 0; t < T; t++){    
                 for (int col = 0; col < segmentWidth; col++){
                     int srcCol = r * segmentWidth + col;
                     int destCol = (r + t * R) * segmentWidth + col;
-                    if (destCol < img.cols) {
-                        reconstructed.at<uchar>(row, destCol) = img.at<uchar>(row, srcCol);
+                    if (destCol < cols) {
+                        output[row * cols + destCol] = input[row * cols + srcCol];
                     }
                 }
             }
         }
     }
-    return reconstructed; // ¡Corrección crucial aquí!
+    
 }
 
 int main() {
@@ -67,11 +82,20 @@ int main() {
         cerr << "Error al cargar la imagen." << endl;
         return -1;
     }
+
+    int rows = img.rows;
+    int cols = img.cols;
+
+    uchar* inputArray = img.data;
+    uchar* outputArray = new uchar[rows * cols];
+    memset(outputArray, 0, rows * cols);
     
-    const string tapType = "2X"; // Prueba con diferentes taps
+    const string tapType = "2X"; 
     
-    Mat reconstructed = applyTap(img, tapType);
+    applyTap(inputArray, outputArray, rows, cols, tapType);
     
+    Mat reconstructed(rows, cols, CV_8UC1, outputArray);
+
     imshow("Imagen Original", img);
     imshow("Imagen Reconstruida", reconstructed);
     
