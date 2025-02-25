@@ -43,43 +43,35 @@ void applyTap(const uchar* input, uchar* output, int rows, int cols, const strin
     cout << "applying taps...\n";
 
     
-    int segmentWidth = cols / R;
-
-
-/*
-for (int row = 0; row < img.rows; row++){
-        for (int col = 0; col < segmentWidth; col++){
-            for (int t = 0; t < T; t++){    
-                for (int r = 0; r < R; r++){
-                    int destCol = (1 + r + t)*col;
-                    reconstructed.at<uchar>(row,destCol) = img.at<uchar>(row,destCol);
-                }
-            }
-        }
-    }
-*/
-
-
-    for (int row = 0; row < rows; row++){
-        for (int r = 0; r < R; r++){
-            for (int t = 0; t < T; t++){    
-                for (int col = 0; col < segmentWidth; col++){
-                    int srcCol = r * segmentWidth + col;
-                    int destCol = (r + t * R) * segmentWidth + col;
-                    if (destCol < cols) {
-                        output[row * cols + destCol] = input[row * cols + srcCol];
-                    }
-                }
-            }
-        }
-    }
+    int regionWidth = cols / R;
+    int numPackets = regionWidth / T; 
     
+    for (int row = 0; row < rows; row++){
+        uchar* newRow = new uchar[cols];
+        memset(newRow, 0, cols);
+        int idx = 0;
+        
+        
+        for (int r = 0; r < R; r++){ // Regions
+            int firstPixRegion = r * regionWidth;
+    
+            for (int p = 0; p < numPackets; p++){ // Packets
+                for (int t = 0; t < T; t++){ // Pixels
+                    int srcCol = firstPixRegion + p * T + t; 
+                    newRow[idx++] = input[row * cols + srcCol]; 
+                }
+            }
+        }
+        memcpy(output + row * cols, newRow, cols * sizeof(uchar));
+        delete [] newRow;
+    }
+
 }
 
 int main() {
     Mat img = imread("C:/CODE/VideoTaps/src/image.jpg", IMREAD_GRAYSCALE);
     if (img.empty()) {
-        cerr << "Error al cargar la imagen." << endl;
+        std::cerr << "Error al cargar la imagen." << std::endl;
         return -1;
     }
 
