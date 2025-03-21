@@ -3,6 +3,7 @@
 #include <cstring> 
 #include <string>
 #include <sstream>
+#include <fstream>
 #include <tuple>
 using namespace cv;
 using namespace std;
@@ -68,29 +69,46 @@ void applyTap(const uchar* input, uchar* output, int rows, int cols, const strin
 
 }
 
+
 int main() {
-    Mat img = imread("C:/CODE/VideoTaps/src/image.jpg", IMREAD_GRAYSCALE);
-    if (img.empty()) {
-        std::cerr << "Error al cargar la imagen." << std::endl;
+    // Abrir el archivo binario
+    std::ifstream file("C:/CODE/VideoTaps/src/prueba.bin", std::ios::binary);
+    if (!file.is_open()) {
+        std::cerr << "No se pudo abrir el archivo binario." << std::endl;
         return -1;
     }
 
-    int rows = img.rows;
-    int cols = img.cols;
+    // Determina el tamaño de la imagen
+    int rows = 480;  // Número de filas
+    int cols = 640;  // Número de columnas
 
-    uchar* inputArray = img.data;
-    uchar* outputArray = new uchar[rows * cols];
-    memset(outputArray, 0, rows * cols);
-    
-    const string tapType = "2X2"; 
-    
-    applyTap(inputArray, outputArray, rows, cols, tapType);
-    
-    Mat reconstructed(rows, cols, CV_8UC1, outputArray);
+    // Crear un buffer para almacenar los datos del archivo binario
+    uint16_t* buffer = new uint16_t[rows * cols]; // Buffer para valores de 16 bits
 
-    imshow("Imagen Original", img);
-    imshow("Imagen Reconstruida", reconstructed);
-    
-    waitKey(0);
+    // Leer el contenido del archivo binario
+    file.read(reinterpret_cast<char*>(buffer), rows * cols * sizeof(uint16_t));
+    if (file.gcount() != rows * cols * sizeof(uint16_t)) {
+        std::cerr << "Error al leer los datos del archivo binario." << std::endl;
+        delete[] buffer;
+        return -1;
+    }
+
+    // Convertir el buffer en una matriz de OpenCV
+    cv::Mat img(rows, cols, CV_16UC1, buffer); // CV_16UC1 es una imagen de 16 bits, un solo canal
+
+    // Encontrar el valor mínimo y máximo en la imagen
+    double minVal, maxVal;
+    cv::minMaxLoc(img, &minVal, &maxVal);
+
+    // Normalizar la imagen al rango de 0-255 (8 bits)
+    cv::Mat img_normalizada;
+    img.convertTo(img_normalizada, CV_8UC1, 255.0 / (maxVal - minVal), -minVal * 255.0 / (maxVal - minVal));
+
+    // Mostrar la imagen ajustada
+    cv::imshow("Imagen Ajustada", img_normalizada);
+    cv::waitKey(0);
+
+    // Liberar memoria
+    delete[] buffer;
     return 0;
 }
