@@ -40,75 +40,61 @@ tuple<int, int, char> readTap(const string& tapType) {
 void applyTap(const uchar* input, uchar* output, int rows, int cols, const string& tapType){
     auto [R, T, L] = readTap(tapType);
     
-    cout << "[R, T, L] = [" << R << ", " << T << ", " << (L ? string(1, L) : "None") << "]\n";
-    cout << "applying taps...\n";
-
+    int regionWidth = cols / R; 
     
-    int regionWidth = cols / R;
-    int numPackets = regionWidth / T; 
-    
-    for (int row = 0; row < rows; row++){
-        uchar* newRow = new uchar[cols];
-        memset(newRow, 0, cols);
-        int idx = 0;
-        
-        
-        for (int r = 0; r < R; r++){ // Regions
-            int firstPixRegion = r * regionWidth;
-    
-            for (int p = 0; p < numPackets; p++){ // Packets
-                for (int t = 0; t < T; t++){ // Pixels
-                    int srcCol = firstPixRegion + p * T + t; 
-                    newRow[idx++] = input[row * cols + srcCol]; 
-                }
+    for (int row = 0; row < rows; row++) {
+        for (int r = 0; r < R; r++) { // Región por Tap
+            for (int col = 0; col < regionWidth; col++) { 
+                int srcIndex = row * cols + r * regionWidth + col;
+                int dstIndex = row * cols + col * R + r; 
+                output[dstIndex] = input[srcIndex];
             }
         }
-        memcpy(output + row * cols, newRow, cols * sizeof(uchar));
-        delete [] newRow;
     }
-
 }
 
-
-int main() {
-    // Abrir el archivo binario
-    std::ifstream file("C:/CODE/VideoTaps/src/prueba.bin", std::ios::binary);
+void openBinaryFile(const std::string& filename, cv::Mat& img, int rows, int cols) {
+    std::ifstream file(filename, std::ios::binary);
     if (!file.is_open()) {
         std::cerr << "No se pudo abrir el archivo binario." << std::endl;
-        return -1;
+        exit(-1);
     }
-
-    // Determina el tamaño de la imagen
-    int rows = 480;  // Número de filas
-    int cols = 640;  // Número de columnas
-
-    // Crear un buffer para almacenar los datos del archivo binario
-    uint16_t* buffer = new uint16_t[rows * cols]; // Buffer para valores de 16 bits
-
-    // Leer el contenido del archivo binario
+    uint16_t* buffer = new uint16_t[rows * cols];
     file.read(reinterpret_cast<char*>(buffer), rows * cols * sizeof(uint16_t));
     if (file.gcount() != rows * cols * sizeof(uint16_t)) {
         std::cerr << "Error al leer los datos del archivo binario." << std::endl;
         delete[] buffer;
-        return -1;
+        exit(-1);
     }
+    img = cv::Mat(rows, cols, CV_16UC1, buffer);
+}
 
-    // Convertir el buffer en una matriz de OpenCV
-    cv::Mat img(rows, cols, CV_16UC1, buffer); // CV_16UC1 es una imagen de 16 bits, un solo canal
+void deconstructAndReconstructImage(const cv::Mat& img, uchar* outputArray, int rows, int cols, const std::string& tapType) {
+    uchar* inputArray = img.data;
+    memset(outputArray, 0, rows * cols);
+    applyTap(inputArray, outputArray, rows, cols, tapType);
+}
 
-    // Encontrar el valor mínimo y máximo en la imagen
+int main() {
+    cv::Mat img;
+    int rows = 480, cols = 640;
+    openBinaryFile("C:/CODE/VideoTaps/src/prueba.bin", img, rows, cols);
+
     double minVal, maxVal;
     cv::minMaxLoc(img, &minVal, &maxVal);
-
-    // Normalizar la imagen al rango de 0-255 (8 bits)
     cv::Mat img_normalizada;
     img.convertTo(img_normalizada, CV_8UC1, 255.0 / (maxVal - minVal), -minVal * 255.0 / (maxVal - minVal));
 
-    // Mostrar la imagen ajustada
-    cv::imshow("Imagen Ajustada", img_normalizada);
+    uchar* outputArray = new uchar[rows * cols];
+    const std::string tapType = "2X2";
+    deconstructAndReconstructImage(img_normalizada, outputArray, rows, cols, tapType);
+
+    cv::Mat reconstructed(rows, cols, CV_8UC1, outputArray);
+
+    cv::imshow("Imagen Original", img_normalizada);
+    cv::imshow("Imagen Reconstruida", reconstructed);
     cv::waitKey(0);
 
-    // Liberar memoria
-    delete[] buffer;
+    delete[] outputArray;
     return 0;
 }
