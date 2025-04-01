@@ -78,7 +78,7 @@ void deconstructAndReconstructImage(const cv::Mat& img, uchar* outputArray, int 
 int main() {
     cv::Mat img;
     int rows = 480, cols = 640;
-    openBinaryFile("C:/CODE/VideoTaps/src/prueba.bin", img, rows, cols);
+    openBinaryFile("C:/CODE/VideoTaps/src/4X.bin", img, rows, cols);
 
     double minVal, maxVal;
     cv::minMaxLoc(img, &minVal, &maxVal);
@@ -86,7 +86,7 @@ int main() {
     img.convertTo(img_normalizada, CV_8UC1, 255.0 / (maxVal - minVal), -minVal * 255.0 / (maxVal - minVal));
 
     uchar* outputArray = new uchar[rows * cols];
-    const std::string tapType = "2X2";
+    const std::string tapType = "4X";
     deconstructAndReconstructImage(img_normalizada, outputArray, rows, cols, tapType);
 
     cv::Mat reconstructed(rows, cols, CV_8UC1, outputArray);
