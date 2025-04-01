@@ -58,7 +58,20 @@ void applyTap(const uchar* input, uchar* output, int rows, int cols, const std::
     auto taps = readTap(tapType);
     std::memset(output, 0, rows * cols);
     
-    for (const auto& tap : taps) {
+    int regionSize = cols / taps[0].R;  // Cambié taps.R por taps[0].R para acceder al primer tap
+
+    for (int row = 0; row < rows; row++){
+        for (int r = 0; r < taps.size(); r++){  // Cambié taps.R por taps.size()
+            for (int col = 0; col < regionSize; col++){
+                int srcIndex = row * cols + r * regionSize + col;  // Corregí el cálculo de srcIndex
+                int dstIndex = row * cols + col * taps[0].R + r;  // Corregí el cálculo de dstIndex
+                output[dstIndex] = input[srcIndex];
+            }
+        }
+    }
+}
+
+/*    for (const auto& tap : taps) {
         int regionSize = (tap.type == 'X') ? cols / tap.R : rows / tap.R;
         
         for (int r = 0; r < tap.R; r++) {
@@ -78,6 +91,7 @@ void applyTap(const uchar* input, uchar* output, int rows, int cols, const std::
         }
     }
 }
+*/
 
 void openBinaryFile(const std::string& filename, cv::Mat& img, int rows, int cols) {
     std::ifstream file(filename, std::ios::binary);
@@ -104,9 +118,11 @@ int main() {
     cv::minMaxLoc(img, &minVal, &maxVal);
     cv::Mat img_normalizada;
     img.convertTo(img_normalizada, CV_8UC1, 255.0 / (maxVal - minVal), -minVal * 255.0 / (maxVal - minVal));
-
     uchar* outputArray = new uchar[rows * cols];
+  
+
     const std::string tapType = "2X2";
+    readTap(tapType);
     applyTap(img_normalizada.data, outputArray, rows, cols, tapType);
 
     cv::Mat reconstructed(rows, cols, CV_8UC1, outputArray);
@@ -116,5 +132,6 @@ int main() {
     cv::waitKey(0);
 
     delete[] outputArray;
+    
     return 0;
 }
