@@ -1,53 +1,79 @@
-#include <opencv2/opencv.hpp>
 #include <iostream>
-#include <cstring> 
+#include <vector>
 #include <string>
-#include <sstream>
-#include <fstream>
 #include <tuple>
-using namespace cv;
-using namespace std;
+#include <opencv2/opencv.hpp>
+#include <cstring>
+#include <fstream>
 
-tuple<int, int, char> readTap(const string& tapType) {
-    size_t xPos = tapType.find('X');
-    if(xPos == string::npos || xPos == 0){
-        cerr << "Invalid format" << endl;
-        return {-1,-1,'\0'};
-    }
+struct TapInfo {
+    char type; // 'X' o 'Y'
+    int R;
+    int T;
+    char L;
+};
 
-    int R = stoi(tapType.substr(0,xPos));
-    int T = 1;
-    char L = '\0';
-
-    if(xPos + 1 < tapType.length()){
-        size_t posL = xPos + 1;
-        while (posL < tapType.length() && isdigit(tapType[posL])) {
-            posL++;
+std::vector<TapInfo> readTap(const std::string& tapType) {
+    std::vector<TapInfo> taps;
+    size_t pos = 0;
+    while (pos < tapType.length()) {
+        char type = tapType[pos + 1];
+        if (type != 'X' && type != 'Y') {
+            std::cerr << "Invalid format" << std::endl;
+            return {};
         }
-
-        if (posL > xPos + 1) {
-            T = stoi(tapType.substr(xPos + 1, posL - (xPos + 1)));
+        int R = std::stoi(tapType.substr(pos, tapType.find(type, pos) - pos));
+        pos = tapType.find(type, pos) + 1;
+        int T = 1;
+        if (pos < tapType.length() && std::isdigit(tapType[pos])) {
+            size_t endT = pos;
+            while (endT < tapType.length() && std::isdigit(tapType[endT])) {
+                endT++;
+            }
+            T = std::stoi(tapType.substr(pos, endT - pos));
+            pos = endT;
         }
-
-        if (posL < tapType.length()) {
-            L = tapType[posL];
+        char L = '\0';
+        if (pos < tapType.length() && std::isalpha(tapType[pos])) {
+            L = tapType[pos];
+            pos++;
         }
+        if (pos < tapType.length() && tapType[pos] == '-') {
+            pos++;
+        }
+        taps.push_back({type, R, T, L});
     }
     
-    return {R, T, L};
+    // Imprimir el resultado del parseo
+    std::cout << "Parsing: " << tapType << std::endl;
+    for (const auto& tap : taps) {
+        std::cout << "R: " << tap.R << ", T: " << tap.T << ", L: " << (tap.L ? std::string(1, tap.L) : "None") << ", Axis: " << tap.type << std::endl;
+    }
+    std::cout << "-------------------" << std::endl;
+    
+    return taps;
 }
 
-void applyTap(const uchar* input, uchar* output, int rows, int cols, const string& tapType){
-    auto [R, T, L] = readTap(tapType);
+void applyTap(const uchar* input, uchar* output, int rows, int cols, const std::string& tapType) {
+    auto taps = readTap(tapType);
+    std::memset(output, 0, rows * cols);
     
-    int regionWidth = cols / R; 
-    
-    for (int row = 0; row < rows; row++) {
-        for (int r = 0; r < R; r++) { // Región por Tap
-            for (int col = 0; col < regionWidth; col++) { 
-                int srcIndex = row * cols + r * regionWidth + col;
-                int dstIndex = row * cols + col * R + r; 
-                output[dstIndex] = input[srcIndex];
+    for (const auto& tap : taps) {
+        int regionSize = (tap.type == 'X') ? cols / tap.R : rows / tap.R;
+        
+        for (int r = 0; r < tap.R; r++) {
+            for (int i = 0; i < regionSize; i++) {
+                int srcIndex, dstIndex;
+                if (tap.type == 'X') {
+                    srcIndex = i * cols + r * regionSize;
+                    dstIndex = i * cols + r;
+                } else {
+                    srcIndex = r * regionSize * cols + i;
+                    dstIndex = i * cols + r * regionSize;
+                }
+                if (srcIndex < rows * cols && dstIndex < rows * cols) {
+                    output[dstIndex] = input[srcIndex];
+                }
             }
         }
     }
@@ -69,12 +95,6 @@ void openBinaryFile(const std::string& filename, cv::Mat& img, int rows, int col
     img = cv::Mat(rows, cols, CV_16UC1, buffer);
 }
 
-void deconstructAndReconstructImage(const cv::Mat& img, uchar* outputArray, int rows, int cols, const std::string& tapType) {
-    uchar* inputArray = img.data;
-    memset(outputArray, 0, rows * cols);
-    applyTap(inputArray, outputArray, rows, cols, tapType);
-}
-
 int main() {
     cv::Mat img;
     int rows = 480, cols = 640;
@@ -87,7 +107,7 @@ int main() {
 
     uchar* outputArray = new uchar[rows * cols];
     const std::string tapType = "2X2";
-    deconstructAndReconstructImage(img_normalizada, outputArray, rows, cols, tapType);
+    applyTap(img_normalizada.data, outputArray, rows, cols, tapType);
 
     cv::Mat reconstructed(rows, cols, CV_8UC1, outputArray);
 
