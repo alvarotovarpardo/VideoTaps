@@ -66,15 +66,20 @@ void applyTap(const uchar* input, uchar* output, int rows, int cols, const strin
     int regionWidth = cols / R;
     int tapsNumber = regionWidth / T; 
     int regionHeight = rows / Ry;
+    int tapsNumberY = regionHeight / Ty;
     
 
-    for (int i = 0; i < regionHeight; i++){
-        for (int r = 0; r < R; r++){
-            for (int j = 0; j < tapsNumber; j++){
-                for (int t = 0; t < T; t++){
-                    int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
-                    int dstIndex = (i * cols) + (T * (j * R + r) + t);
-                    output[dstIndex] = input[srcIndex];
+    for (int ry = 0; ry < Ry; ry++){
+        for (int i = 0; i < tapsNumberY; i++){
+            for (int ty = 0; ty < Ty; ty++){
+                for (int r = 0; r < R; r++){
+                    for (int j = 0; j < tapsNumber; j++){
+                        for (int t = 0; t < T; t++){
+                            int srcIndex = ((ry * regionHeight + i * tapsNumberY + ty) * cols) + (r * regionWidth + j * T + t);
+                            int dstIndex = ((Ty * (i * Ry + ry) + t) * cols) + (T * (j * R + r) + t);
+                            output[dstIndex] = input[srcIndex];
+                        }
+                    }
                 }
             }
         }
@@ -107,7 +112,7 @@ int main() {
 
     cv::Mat img;
     int rows = 480, cols = 640;
-    const std::string tapType = "4X2-1Y";   
+    const std::string tapType = "1X2-1Y2";   
     openBinaryFile("C:/CODE/VideoTaps/src/" + tapType + ".bin", img, rows, cols);
 
     double minVal, maxVal;
