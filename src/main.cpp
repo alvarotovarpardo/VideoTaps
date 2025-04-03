@@ -69,7 +69,19 @@ void applyTap(const uchar* input, uchar* output, int rows, int cols, const strin
     int regionHeight = rows / Ry;
     int tapsNumberY = regionHeight / Ty;
     
-
+    
+    for (int i = 0; i < regionHeight; i++){
+        for (int r = 0; r < R; r++){
+            for (int j = 0; j < tapsNumber; j++){
+                for (int t = 0; t < T; t++){
+                    int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
+                    int dstIndex = (i * cols) + (T * (j * R + r) + t);
+                    output[dstIndex] = input[srcIndex];
+                }
+            }
+        }
+    } 
+    /*
     for (int ry = 0; ry < Ry; ry++){
         for (int i = 0; i < tapsNumberY; i++){
             for (int ty = 0; ty < Ty; ty++){
@@ -84,30 +96,9 @@ void applyTap(const uchar* input, uchar* output, int rows, int cols, const strin
                 }
             }
         }
-    }
+    } */
 }
 
-/*    for (const auto& tap : taps) {
-        int regionSize = (tap.type == 'X') ? cols / tap.R : rows / tap.R;
-        
-        for (int r = 0; r < tap.R; r++) {
-            for (int i = 0; i < regionSize; i++) {
-                int srcIndex, dstIndex;
-                if (tap.type == 'X') {
-                    srcIndex = i * cols + r * regionSize;
-                    dstIndex = i * cols + r;
-                } else {
-                    srcIndex = r * regionSize * cols + i;
-                    dstIndex = i * cols + r * regionSize;
-                }
-                if (srcIndex < rows * cols && dstIndex < rows * cols) {
-                    output[dstIndex] = input[srcIndex];
-                }
-            }
-        }
-    }
-}
-*/
 
 void openBinaryFile(const std::string& filename, cv::Mat& img, int rows, int cols) {
     std::ifstream file(filename, std::ios::binary);
@@ -125,11 +116,17 @@ void openBinaryFile(const std::string& filename, cv::Mat& img, int rows, int col
     img = cv::Mat(rows, cols, CV_16UC1, buffer);
 }
 
+void deconstructAndReconstructImage(const cv::Mat& img, uchar* outputArray, int rows, int cols, const std::string& tapType) {
+    uchar* inputArray = img.data;
+    memset(outputArray, 0, rows * cols);
+    applyTap(inputArray, outputArray, rows, cols, tapType);
+}
+
 int main() {
 
     cv::Mat img;
     int rows = 480, cols = 640;
-    const std::string tapType = "1X2-1Y2";   
+    const std::string tapType = "4X2-1Y";   
     openBinaryFile("C:/CODE/VideoTaps/src/" + tapType + ".bin", img, rows, cols);
 
     double minVal, maxVal;
