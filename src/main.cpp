@@ -72,25 +72,22 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
     if(L == 'E'){
         uchar* buffer = new uchar[rows * cols];
         memset(buffer, 0, rows * cols);
-        if(T == 1){
+        if(T == 1 || T == 2){
             std::cout << "Deshaciendo E...\n";
             std::ofstream ofile("dstIdx.txt");
             for(int i = 0; i < regionHeight; i++){
                 for(int r = 0; r < R; r++){
-                    for(int j = 0; j < tapsNumber; j++){
-                        for(int t = 0; t < T; t++){
-                            if(r == 1){
-                                int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
-                                int dstIndex = (i * cols) + (r * regionWidth + tapsNumber - (j + 1));
-                                ofile << srcIndex << " "<< dstIndex << " \t||\t " << r << " " << j << " " <<  static_cast<int>(input[srcIndex]) << std::endl;
-                                buffer[dstIndex] = input[srcIndex];
-                            } else if(r == 0){
-                                int srcIndex = (i * cols) + j * T + t;
-                                int dstIndex = (i * cols) + j;
-                                buffer[dstIndex] = input[srcIndex];
-                                ofile << srcIndex << " "<< dstIndex << " \t||\t " << r << " " << j << " " <<  static_cast<int>(input[srcIndex]) << std::endl;
-
-                            }
+                    for(int j = 0; j < regionWidth; j++){
+                        if(r == 1){
+                            int srcIndex = (i * cols) + (r * regionWidth + j);
+                            int dstIndex = (i * cols) + (r * regionWidth * R - (j + 1));
+                            ofile << srcIndex << " "<< dstIndex << " \t||\t " << r << " " << j << " " <<  static_cast<int>(input[srcIndex]) << std::endl;
+                            buffer[dstIndex] = input[srcIndex];
+                        } else if(r == 0){
+                            int srcIndex = (i * cols) + j;
+                            int dstIndex = (i * cols) + j;
+                            buffer[dstIndex] = input[srcIndex];
+                            ofile << srcIndex << " "<< dstIndex << " \t||\t " << r << " " << j << " " <<  static_cast<int>(input[srcIndex]) << std::endl;
                         }
                     }
                 } ofile.close();
