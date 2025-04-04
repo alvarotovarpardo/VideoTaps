@@ -61,27 +61,116 @@ tuple<int, int, char, int, int, char> readTap(const string& tapType) {
 }
 
 
-void applyTap(const uchar* input, uchar* output, int rows, int cols, const string& tapType) {
+void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tapType) {
     auto [R, T, L, Ry, Ty, Ly] = readTap(tapType);
 
     int regionWidth = cols / R;
     int tapsNumber = regionWidth / T; 
     int regionHeight = rows / Ry;
     int tapsNumberY = regionHeight / Ty;
-    
-    
-    for (int i = 0; i < regionHeight; i++){
-        for (int r = 0; r < R; r++){
-            for (int j = 0; j < tapsNumber; j++){
-                for (int t = 0; t < T; t++){
-                    int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
-                    int dstIndex = (i * cols) + (T * (j * R + r) + t);
-                    output[dstIndex] = input[srcIndex];
-                }
+
+    if(L == 'E'){
+        uchar* buffer = new uchar[rows * cols];
+        memset(buffer, 0, rows * cols);
+        if(T == 1){
+            std::cout << "Deshaciendo E...\n";
+            std::ofstream ofile("dstIdx.txt");
+            for(int i = 0; i < regionHeight; i++){
+                for(int r = 0; r < R; r++){
+                    for(int j = 0; j < tapsNumber; j++){
+                        for(int t = 0; t < T; t++){
+                            if(r == 1){
+                                int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
+                                int dstIndex = (i * cols) + (r * regionWidth + tapsNumber - (j + 1));
+                                ofile << srcIndex << " "<< dstIndex << " \t||\t " << r << " " << j << " " <<  static_cast<int>(input[srcIndex]) << std::endl;
+                                buffer[dstIndex] = input[srcIndex];
+                            } else if(r == 0){
+                                int srcIndex = (i * cols) + j * T + t;
+                                int dstIndex = (i * cols) + j;
+                                buffer[dstIndex] = input[srcIndex];
+                                ofile << srcIndex << " "<< dstIndex << " \t||\t " << r << " " << j << " " <<  static_cast<int>(input[srcIndex]) << std::endl;
+
+                            }
+                        }
+                    }
+                } ofile.close();
             }
         }
-    } 
-    /*
+    L = '\0';
+    memcpy(input, buffer, rows * cols);
+    delete [] buffer; buffer = nullptr;
+    }
+    
+
+/*
+    // Caso 2XE
+    if(L == 'E'){
+        if(R == 2){
+            if(T == 1){
+                std::cout << "2XE case\n";
+                std::ofstream ofile("2X2E.txt");
+                for (int i = 0; i < regionHeight; i++){
+                    for (int r = 0; r < R; r++){
+                        for (int j = 0; j < tapsNumber; j++){
+                            for (int t = 0; t < T; t++){
+                                if(r == 0){
+                                    int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
+                                    int dstIndex = (i * cols) + (T * (j * R + r) + t);
+                                    output[dstIndex] = input[srcIndex];
+                                    ofile << srcIndex << " "<< dstIndex << " \t||\t " << r << " " << j << std::endl;                        
+                                } else if(r == 1){
+                                    int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
+                                    int dstIndex = (i * cols) + (T * (cols - 1) - 2*j + t);
+                                    output[dstIndex] = input[srcIndex];
+                                    ofile << srcIndex << " " << dstIndex << " \t||\t " << r << " " << j << std::endl;
+                                }
+                            }
+                        } 
+                    } ofile.close();
+                }
+            } else if(T == 2){
+                std::cout << "2X2E case\n";
+                std::ofstream ofile("dstIdx.txt");
+                for (int i = 0; i < regionHeight; i++){
+                    for (int r = 0; r < R; r++){
+                        for (int j = 0; j < tapsNumber; j++){
+                            for (int t = 0; t < T; t++){
+                                if(r == 0){
+                                    int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
+                                    int dstIndex = (i * cols) + (T * (j * R + r) + t);
+                                    output[dstIndex] = input[srcIndex];
+                                    ofile << srcIndex << " "<< dstIndex << " \t||\t " << r << " " << j << std::endl;                        
+                                } else if(r == 1){
+                                    int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
+                                    int dstIndex = (i * cols) + (T * (cols - 1) - 2*j + t);
+                                    output[dstIndex] = input[srcIndex];
+                                    ofile << srcIndex << " " << dstIndex << " \t||\t " << r << " " << j << std::endl;
+                                }
+                            }
+                        } 
+                    } ofile.close();
+                }
+            } 
+        } 
+    } else { */
+        std::ofstream ofile("2X.txt");
+        std::cout << "Deshaciendo 2X...\n";
+        for (int i = 0; i < regionHeight; i++){
+            for (int r = 0; r < R; r++){
+                for (int j = 0; j < tapsNumber; j++){
+                    for (int t = 0; t < T; t++){
+                        int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
+                        int dstIndex = (i * cols) + (T * (j * R + r) + t);
+                        output[dstIndex] = input[srcIndex];
+                        ofile << srcIndex << " " << dstIndex << " \t||\t " << r << " " << j << std::endl;
+                    }
+                }
+            } ofile.close();
+        }
+    
+
+
+    /* 
     for (int ry = 0; ry < Ry; ry++){
         for (int i = 0; i < tapsNumberY; i++){
             for (int ty = 0; ty < Ty; ty++){
@@ -126,14 +215,15 @@ int main() {
 
     cv::Mat img;
     int rows = 480, cols = 640;
-    const std::string tapType = "4X2-1Y";   
+    const std::string tapType = "2XE"; // NXM(-1Y1) -> X: N regiones ; M píxeles simultáneos   
+    // 2X2E -> 2X2 -> 1X
     openBinaryFile("C:/CODE/VideoTaps/src/" + tapType + ".bin", img, rows, cols);
 
     double minVal, maxVal;
     cv::minMaxLoc(img, &minVal, &maxVal);
     cv::Mat img_normalizada;
-    double alpha = 255.0 / (maxVal - minVal); // Contraste
-    double beta = 50;  // Brillo (ajusta este valor)
+    double alpha = 255.0 / (maxVal - minVal); 
+    double beta = 50;  
     img.convertTo(img_normalizada, CV_8UC1, alpha, -minVal * alpha + beta);
     
 
