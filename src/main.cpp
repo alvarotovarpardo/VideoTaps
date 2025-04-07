@@ -74,7 +74,7 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
         memset(buffer, 0, rows * cols);
         if(T == 1 || T == 2){
             std::cout << "Deshaciendo E...\n";
-            std::ofstream ofile("E.txt");
+            std::ofstream ofile("E2.txt");
             for(int i = 0; i < regionHeight; i++){
                 for(int r = 0; r < R; r++){
                     for(int j = 0; j < tapsNumber; j++){
@@ -82,7 +82,8 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
                             int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
                             
                             if(r >= R/2){
-                                int dstIndex = (i * cols) + (regionWidth * (r + 1) - (2*j + 2 - t));
+                                //int dstIndex = (i * cols) + (regionWidth * (r + 1) - (T * j + t + 1));
+                                int dstIndex = (i * cols) + (regionWidth * (r + 1) - (T * (j + 1) - t));
                                 ofile << srcIndex << " "<< dstIndex << "\n";// \t||\t " << r << " " << j << " " << t << " \n"; // << static_cast<int>(input[srcIndex]) << std::endl;
                                 buffer[dstIndex] = input[srcIndex];
                             } else {
