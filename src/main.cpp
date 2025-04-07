@@ -78,7 +78,7 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
             for(int i = 0; i < regionHeight; i++){
                 for(int r = 0; r < R; r++){
                     for(int j = 0; j < regionWidth; j++){
-                        if(r == 1){
+                        if(r >= 1){
                             int srcIndex = (i * cols) + (r * regionWidth + j);
                             int dstIndex = (i * cols) + (r * regionWidth * R - (j + 1));
                             ofile << srcIndex << " "<< dstIndex << " \t||\t " << r << " " << j << " " <<  static_cast<int>(input[srcIndex]) << std::endl;
@@ -97,6 +97,38 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
     memcpy(input, buffer, rows * cols);
     delete [] buffer; buffer = nullptr;
     }
+
+    if(L == 'M'){
+        uchar* buffer = new uchar[rows * cols];
+        memset(buffer, 0, rows * cols);
+        if(T == 1 || T == 2){
+            std::cout << "Deshaciendo M...\n";
+            std::ofstream ofile("dstIdx.txt");
+            for(int i = 0; i < regionHeight; i++){
+                for(int r = 0; r < R; r++){
+                    for(int j = 0; j < tapsNumber; j++){
+                        for(int t = 0; t < T; t++){
+                            if(r == 0){
+                                int srcIndex = (i * cols) + T * j + t;
+                                int dstIndex = (i * cols) + ((regionWidth - T*(j+1) + t));
+                                ofile << srcIndex << " "<< dstIndex << " \t||\t " << r << " " << j << " " <<  static_cast<int>(input[srcIndex]) << std::endl;
+                                buffer[dstIndex] = input[srcIndex];
+                            } else if(r == 1){
+                                int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
+                                int dstIndex = (i * cols) + (r * regionWidth + j * T + t);
+                                buffer[dstIndex] = input[srcIndex];
+                                ofile << srcIndex << " "<< dstIndex << " \t||\t " << r << " " << j << " " <<  static_cast<int>(input[srcIndex]) << std::endl;
+                            }
+                        }
+                    }
+                } ofile.close();
+            }
+        }
+    L = '\0';
+    memcpy(input, buffer, rows * cols);
+    delete [] buffer; buffer = nullptr;
+    }
+    
     
 
 /*
@@ -150,8 +182,8 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
             } 
         } 
     } else { */
-        std::ofstream ofile("2X.txt");
-        std::cout << "Deshaciendo 2X...\n";
+        std::ofstream ofile("2X2E.txt");
+        std::cout << "Deshaciendo 2X2...\n";
         for (int i = 0; i < regionHeight; i++){
             for (int r = 0; r < R; r++){
                 for (int j = 0; j < tapsNumber; j++){
@@ -212,7 +244,7 @@ int main() {
 
     cv::Mat img;
     int rows = 480, cols = 640;
-    const std::string tapType = "2XE"; // NXM(-1Y1) -> X: N regiones ; M píxeles simultáneos   
+    const std::string tapType = "2X2M-1Y"; // NXM(-1Y1) -> X: N regiones ; M píxeles simultáneos   
     // 2X2E -> 2X2 -> 1X
     openBinaryFile("C:/CODE/VideoTaps/src/" + tapType + ".bin", img, rows, cols);
 
