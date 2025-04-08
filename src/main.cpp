@@ -105,19 +105,17 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
         uchar* buffer = new uchar[rows * cols];
         memset(buffer, 0, rows * cols);
         if(T == 1 || T == 2){
-            std::cout << "Deshaciendo M...\n";
             std::ofstream ofile("dstIdx.txt");
             for(int i = 0; i < regionHeight; i++){
                 for(int r = 0; r < R; r++){
                     for(int j = 0; j < tapsNumber; j++){
                         for(int t = 0; t < T; t++){
+                            int srcIndex = (i * cols) + (r * regionWidth + j * T + t);                            
                             if(r == 0){
-                                int srcIndex = (i * cols) + T * j + t;
-                                int dstIndex = (i * cols) + ((regionWidth - T*(j+1) + t));
+                                int dstIndex = (i * cols) + (regionWidth - T * (j + 1) + t);
                                 ofile << srcIndex << " "<< dstIndex << " \t||\t " << r << " " << j << " " <<  static_cast<int>(input[srcIndex]) << std::endl;
                                 buffer[dstIndex] = input[srcIndex];
-                            } else if(r == 1){
-                                int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
+                            } else if(r >= R/2){
                                 int dstIndex = (i * cols) + (r * regionWidth + j * T + t);
                                 buffer[dstIndex] = input[srcIndex];
                                 ofile << srcIndex << " "<< dstIndex << " \t||\t " << r << " " << j << " " <<  static_cast<int>(input[srcIndex]) << std::endl;
