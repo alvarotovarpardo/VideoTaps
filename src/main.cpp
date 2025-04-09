@@ -68,10 +68,13 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
     int tapsNumber = regionWidth / T; 
     int regionHeight = rows / Ry;
     int tapsNumberY = regionHeight / Ty;
-
+    
+    uchar* buffer = new uchar[rows * cols];
+    memcpy(buffer, input, rows * cols);
+    
     if(L == 'E'){
-        uchar* buffer = new uchar[rows * cols];
-        memset(buffer, 0, rows * cols);
+        //uchar* buffer = new uchar[rows * cols];
+        //memset(buffer, 0, rows * cols);
         std::ofstream ofile("E2.txt");
         for(int i = 0; i < regionHeight; i++){
             for(int r = 0; r < R; r++){
@@ -97,13 +100,13 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
             } ofile.close();
         }
     L = '\0';
-    memcpy(input, buffer, rows * cols);
-    delete [] buffer; buffer = nullptr;
+    //memcpy(input, buffer, rows * cols);
+    //delete [] buffer; buffer = nullptr;
     }
 
     if(L == 'M'){
-        uchar* buffer = new uchar[rows * cols];
-        memset(buffer, 0, rows * cols);
+        //uchar* buffer = new uchar[rows * cols];
+        //memset(buffer, 0, rows * cols);
         if(T == 1 || T == 2){
             std::ofstream ofile("dstIdx.txt");
             for(int i = 0; i < regionHeight; i++){
@@ -126,8 +129,8 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
             }
         }
     L = '\0';
-    memcpy(input, buffer, rows * cols);
-    delete [] buffer; buffer = nullptr;
+    //memcpy(input, buffer, rows * cols);
+    //delete [] buffer; buffer = nullptr;
     }
     
 
@@ -139,12 +142,14 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
                 for (int t = 0; t < T; t++){
                     int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
                     int dstIndex = (i * cols) + (T * (j * R + r) + t);
-                    output[dstIndex] = input[srcIndex];
+                    output[dstIndex] = buffer[srcIndex];
                     ofile << srcIndex << " " << dstIndex << "\n";// \t||\t " << r << " " << j << " " << t << std::endl;
                 }
             }
         } ofile.close();
     }
+
+    delete [] buffer; buffer = nullptr;
 }
 
 
