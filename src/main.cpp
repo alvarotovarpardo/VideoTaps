@@ -99,7 +99,7 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
                                 int dstIndex = (i * cols) + r * regionWidth + j * T + t;
                                 buffer[dstIndex] = input[srcIndex];
                             } else {
-                                int dstIndex = (i * cols) + (regionWidth - (T * (j + 1) - t));
+                                int dstIndex = (i * cols) + (regionWidth * (r + 1) - (T * (j + 1) - t));
                                 buffer[dstIndex] = input[srcIndex];
 
                             }
