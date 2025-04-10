@@ -73,8 +73,6 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
     memcpy(buffer, input, rows * cols);
     
     if(L != '\0'){
-        //uchar* buffer = new uchar[rows * cols];
-        //memset(buffer, 0, rows * cols);
         std::ofstream ofile("E2.txt");
         for(int i = 0; i < regionHeight; i++){
             for(int r = 0; r < R; r++){
@@ -101,19 +99,16 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
                                 int dstIndex = (i * cols) + r * regionWidth + j * T + t;
                                 buffer[dstIndex] = input[srcIndex];
                             } else {
-                                int dstIndex = (i * cols) + (regionWidth - T * (j + 1) + t);
+                                int dstIndex = (i * cols) + (regionWidth - (T * (j + 1) - t));
                                 buffer[dstIndex] = input[srcIndex];
 
                             }
-
                         }
                     }
                 }
             } ofile.close();
         }
     L = '\0';
-    //memcpy(input, buffer, rows * cols);
-    //delete [] buffer; buffer = nullptr;
     }
     
 
