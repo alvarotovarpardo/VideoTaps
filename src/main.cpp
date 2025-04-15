@@ -112,6 +112,27 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
     }
     
 
+
+
+    if(Ty != 1){
+        std::ofstream ofile("Ly.txt");
+        for (int i = 0; i < rows; i++){
+            for(int j = 0; j < cols; j++){
+                int srcIndex = (i * cols) + j;
+                if(i % 2 == 0){
+                    int dstIndex = (i * cols) + 2*j;
+                    output[dstIndex] = buffer[srcIndex];
+                    ofile << srcIndex << " " << dstIndex << "\n";// \t||\t " << r << " " << j << " " << t << std::endl;
+                } else {
+                    int dstIndex = ((i-1) * cols) + 2*j+1;
+                    output[dstIndex] = buffer[srcIndex];
+                    ofile << srcIndex << " " << dstIndex << "\t||\t " << i << " " << j << std::endl;
+                }
+            } 
+        } ofile.close(); 
+    }
+
+/*
     std::ofstream ofile("4X2E.txt");
 
     for (int i = 0; i < regionHeight; i++){
@@ -125,7 +146,7 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
                 }
             }
         } ofile.close();
-    }
+    }*/
 
     delete [] buffer; buffer = nullptr;
 }
