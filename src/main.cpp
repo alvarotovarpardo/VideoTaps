@@ -119,7 +119,6 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
     memcpy(buffer, input, rows * cols);
     
     if(L != '\0'){
-        // std::ofstream ofile("E2.txt");
         for(int i = 0; i < regionHeight; i++){
             for(int r = 0; r < R; r++){
                 for(int j = 0; j < tapsNumber; j++){
@@ -133,12 +132,10 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
                                 } else {
                                     int dstIndex = (i * cols) + (regionWidth * (r + 1) - (T * (j + 1) - t));
                                     buffer[dstIndex] = input[srcIndex];                                
-                                   // ofile << srcIndex << " "<< dstIndex << "\n";// \t||\t " << r << " " << j << " " << t << " \n"; // << static_cast<int>(input[srcIndex]) << std::endl;
                                 }
                             } else {
                                 int dstIndex = (i * cols) + r * regionWidth + j * T + t;
                                 buffer[dstIndex] = input[srcIndex];
-                                // ofile << srcIndex << " "<< dstIndex << "\n"; // \t||\t " << r << " " << j <<  " " << t << " \n"; // << static_cast<int>(input[srcIndex]) << std::endl;
                             }
                         } else if (L == 'M'){
                             if(r >= R/2){
@@ -155,7 +152,7 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
                         }
                     }
                 }
-            } // ofile.close();
+            }
         }
     L = '\0';
     }
@@ -164,27 +161,22 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
 
 
     if(Ty != 1 && T == 1){
-        // std::ofstream ofile("Ly.txt");
         for (int i = 0; i < rows; i++){
             for(int j = 0; j < cols; j++){
                 int srcIndex = (i * cols) + j;
                 int dstIndex = ((i - (i % 2)) * cols) + (2 * j + (i % 2));
-                // ofile << srcIndex << " " << dstIndex << "\n";// \t||\t " << r << " " << j << " " << t << std::endl;
                 output[dstIndex] = buffer[srcIndex];
             }
-        } // ofile.close(); 
-    } if(Ty != 1 && T != 1){
-        // std::ofstream ofile("L_Ly.txt");
+        } 
+    } else if(Ty != 1 && T != 1){
         for (int i = 0; i < rows; i++){
             for(int j = 0; j < cols; j++){
                 int srcIndex = (i * cols) + j;
                 int dstIndex = ((i - (i % 2)) * cols) + (2 * j + (i % 2));
-                // ofile << srcIndex << " " << dstIndex << "\n";// \t||\t " << r << " " << j << " " << t << std::endl;
                 output[dstIndex] = buffer[srcIndex];
             }
-        } // ofile.close(); 
+        }
     } else {
-        // std::ofstream ofile("4X2E.txt");
         for (int i = 0; i < regionHeight; i++){
             for (int r = 0; r < R; r++){
                 for (int j = 0; j < tapsNumber; j++){
@@ -192,17 +184,15 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
                         int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
                         int dstIndex = (i * cols) + (T * (j * R + r) + t);
                         output[dstIndex] = buffer[srcIndex];
-                       // ofile << srcIndex << " " << dstIndex << "\n";// \t||\t " << r << " " << j << " " << t << std::endl;
                     }
                 }
-            } // ofile.close();
+            } 
         }
-    }
+    } 
     delete [] buffer; buffer = nullptr;
 }
 
 cv::Mat normalizeImage(const cv::Mat& img) {
-    std::cout << "Inside normalizeImage\n";
     double minVal, maxVal; cv::minMaxLoc(img, &minVal, &maxVal);
     cv::Mat out;
 
