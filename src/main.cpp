@@ -233,7 +233,8 @@ void processFrame(const cv::Mat& img, uchar* outputArray, int rows, int cols, co
 void saveAndShow(cv::Mat& input, cv::Mat& output, const std::string& tapType){
     cv::imshow("Imagen Original", input);
     cv::imshow("Imagen Reconstruida", output);
-    cv::waitKey(0);
+    cv::waitKey(3000);
+    cv::destroyAllWindows();
 
     //cv::imwrite((tapType + "_Original.png"), input);
     //cv::imwrite((tapType + "_Reconstruida.png"), output);
