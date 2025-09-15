@@ -198,8 +198,28 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
     } 
     ofile2.close();
     
-    
-    
+/*   
+    // 2X-1Y2
+    if(Ty != 1){ 
+        for (int i = 0; i < regionHeight; i++){
+            for(int ty = 0; ty < Ty; ty++){
+                for (int r = 0; r < R; r++){
+                    for (int j = 0; j < regionWidth; j++){
+                        int srcIndex = ((i+ty) * cols) + (r * regionWidth + j);
+                        int dstIndex = cols * j;
+                        buffer[dstIndex] = input[srcIndex];
+                        ofile1 << srcIndex << " " << dstIndex << "\n";
+                    }
+                } 
+            }
+        }
+        memcpy(output, buffer, rows * cols);
+    } else {
+        memcpy(output, buffer, rows * cols);    
+    } 
+*/
+    ofile1.close();
+
     delete [] buffer; buffer = nullptr;
     delete [] bufferX; bufferX = nullptr;
     delete [] bufferY; bufferY = nullptr;
