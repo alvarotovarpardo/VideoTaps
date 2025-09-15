@@ -126,7 +126,7 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
     
     std::ofstream ofile1("step1.txt");
     std::ofstream ofile2("step2.txt");
-
+/*
     if(R != 1 || T != 1 || L != '\0'){
         if(L != '\0'){
             for(int i = 0; i < regionHeight; i++){
@@ -197,27 +197,30 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
         memcpy(output, buffer, rows * cols);    
     } 
     ofile2.close();
-    
-/*   
+ */   
+  
     // 2X-1Y2
+    size_t src = 0;
     if(Ty != 1){ 
-        for (int i = 0; i < regionHeight; i++){
-            for(int ty = 0; ty < Ty; ty++){
-                for (int r = 0; r < R; r++){
-                    for (int j = 0; j < regionWidth; j++){
-                        int srcIndex = ((i+ty) * cols) + (r * regionWidth + j);
-                        int dstIndex = cols * j;
-                        buffer[dstIndex] = input[srcIndex];
-                        ofile1 << srcIndex << " " << dstIndex << "\n";
+    for (int i = 0; i < rows; i += Ty) {          // bloques verticales de 2 filas: (i, i+1)
+        for (int j = 0; j < regionWidth; ++j) {   // columna dentro del bloque/región
+            for (int ty = 0; ty < Ty; ++ty) {         // región horizontal (0 izquierda, 1 derecha) ← LENTO
+                for (int r = 0; r < R; ++r) { // línea dentro del bloque (0,1) ← RÁPIDO
+                    int dstRow = i + ty;
+                    int dstCol = r * regionWidth + j;
+                    int dstIndex = dstRow * cols + dstCol;
+                    ofile1 << src << " " << dstIndex << "\n";
+                    output[src++] = input[dstIndex];
+                    
                     }
                 } 
             }
         }
-        memcpy(output, buffer, rows * cols);
+        //memcpy(output, buffer, rows * cols);
     } else {
         memcpy(output, buffer, rows * cols);    
     } 
-*/
+
     ofile1.close();
 
     delete [] buffer; buffer = nullptr;
