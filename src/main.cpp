@@ -115,81 +115,88 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
     int regionHeight = rows / Ry;
     int tapsNumberY = regionHeight / Ty;
     
+    uchar* bufferX = new uchar[rows * cols];
+    memcpy(bufferX, input, rows * cols);
+    
+    uchar* bufferY = new uchar[rows * cols];
+    memcpy(bufferY, input, rows * cols);
+
     uchar* buffer = new uchar[rows * cols];
     memcpy(buffer, input, rows * cols);
     
-    if(L != '\0'){
-        for(int i = 0; i < regionHeight; i++){
-            for(int r = 0; r < R; r++){
-                for(int j = 0; j < tapsNumber; j++){
-                    for(int t = 0; t < T; t++){
-                        int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
-                        if(L == 'E'){
-                            if(r >= R/2){
-                                if(R == 2){
-                                    int dstIndex = (i * cols) + (regionWidth * (r + 1) - (T * j + t + 1));    
-                                    buffer[dstIndex] = input[srcIndex];
+    if(R != 1 || T != 1 || L != '\0'){
+        if(L != '\0'){
+            for(int i = 0; i < regionHeight; i++){
+                for(int r = 0; r < R; r++){
+                    for(int j = 0; j < tapsNumber; j++){
+                        for(int t = 0; t < T; t++){
+                            int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
+                            if(L == 'E'){
+                                if(r >= R/2){
+                                    if(R == 2){
+                                        int dstIndex = (i * cols) + (regionWidth * (r + 1) - (T * j + t + 1));    
+                                        bufferX[dstIndex] = input[srcIndex];
+                                    } else {
+                                        int dstIndex = (i * cols) + (regionWidth * (r + 1) - (T * (j + 1) - t));
+                                        bufferX[dstIndex] = input[srcIndex];                                
+                                    }
+                                } else {
+                                    int dstIndex = (i * cols) + r * regionWidth + j * T + t;
+                                    bufferX[dstIndex] = input[srcIndex];
+                                }
+                            } else if (L == 'M'){
+                                if(r >= R/2){
+                                    int dstIndex = (i * cols) + r * regionWidth + j * T + t;
+                                    bufferX[dstIndex] = input[srcIndex];
                                 } else {
                                     int dstIndex = (i * cols) + (regionWidth * (r + 1) - (T * (j + 1) - t));
-                                    buffer[dstIndex] = input[srcIndex];                                
+                                    bufferX[dstIndex] = input[srcIndex];
                                 }
-                            } else {
-                                int dstIndex = (i * cols) + r * regionWidth + j * T + t;
-                                buffer[dstIndex] = input[srcIndex];
-                            }
-                        } else if (L == 'M'){
-                            if(r >= R/2){
-                                int dstIndex = (i * cols) + r * regionWidth + j * T + t;
-                                buffer[dstIndex] = input[srcIndex];
-                            } else {
+                            } else if (L == 'R'){
                                 int dstIndex = (i * cols) + (regionWidth * (r + 1) - (T * (j + 1) - t));
-                                buffer[dstIndex] = input[srcIndex];
-                            }
-                        } else if (L == 'R'){
-                            int dstIndex = (i * cols) + (regionWidth * (r + 1) - (T * (j + 1) - t));
-                            buffer[dstIndex] = input[srcIndex];
+                                bufferX[dstIndex] = input[srcIndex];
 
+                            }
                         }
                     }
                 }
             }
+            L = '\0';
         }
-    L = '\0';
-    }
     
-
-
-
-    if(Ty != 1 && T == 1){
-        for (int i = 0; i < rows; i++){
-            for(int j = 0; j < cols; j++){
-                int srcIndex = (i * cols) + j;
-                int dstIndex = ((i - (i % 2)) * cols) + (2 * j + (i % 2));
-                output[dstIndex] = buffer[srcIndex];
-            }
-        } 
-    } else if(Ty != 1 && T != 1){
-        for (int i = 0; i < rows; i++){
-            for(int j = 0; j < cols; j++){
-                int srcIndex = (i * cols) + j;
-                int dstIndex = ((i - (i % 2)) * cols) + (2 * j + (i % 2));
-                output[dstIndex] = buffer[srcIndex];
-            }
-        }
-    } else {
         for (int i = 0; i < regionHeight; i++){
             for (int r = 0; r < R; r++){
                 for (int j = 0; j < tapsNumber; j++){
                     for (int t = 0; t < T; t++){
                         int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
                         int dstIndex = (i * cols) + (T * (j * R + r) + t);
-                        output[dstIndex] = buffer[srcIndex];
+                        buffer[dstIndex] = bufferX[srcIndex];
                     }
                 }
             } 
         }
-    } 
+    
+    }
+
+
+    if(Ty != 1){ 
+        for (int i = 0; i < rows; i++){
+            for(int j = 0; j < cols; j++){
+                int srcIndex = (i * cols) + j;
+                int dstIndex = ((i - (i % 2)) * cols) + (2 * j + (i % 2));
+                bufferY[dstIndex] = buffer[srcIndex];
+                memcpy(output, bufferY, rows * cols);
+            }
+        }
+    } else {
+        memcpy(output, buffer, rows * cols);    
+    }
+    
+    
+    
     delete [] buffer; buffer = nullptr;
+    delete [] bufferX; bufferX = nullptr;
+    delete [] bufferY; bufferY = nullptr;
 }
 
 cv::Mat normalizeImage(const cv::Mat& img) {
