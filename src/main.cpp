@@ -124,6 +124,9 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
     uchar* buffer = new uchar[rows * cols];
     memcpy(buffer, input, rows * cols);
     
+    std::ofstream ofile1("step1.txt");
+    std::ofstream ofile2("step2.txt");
+
     if(R != 1 || T != 1 || L != '\0'){
         if(L != '\0'){
             for(int i = 0; i < regionHeight; i++){
@@ -171,11 +174,12 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
                         int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
                         int dstIndex = (i * cols) + (T * (j * R + r) + t);
                         buffer[dstIndex] = bufferX[srcIndex];
+                        ofile1 << srcIndex << " " << dstIndex << "\n";
                     }
                 }
             } 
         }
-    
+        ofile1.close();
     }
 
 
@@ -185,12 +189,14 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
                 int srcIndex = (i * cols) + j;
                 int dstIndex = ((i - (i % 2)) * cols) + (2 * j + (i % 2));
                 bufferY[dstIndex] = buffer[srcIndex];
-                memcpy(output, bufferY, rows * cols);
+                ofile2 << srcIndex << " " << dstIndex << "\n";
             }
         }
+        memcpy(output, bufferY, rows * cols);
     } else {
         memcpy(output, buffer, rows * cols);    
-    }
+    } 
+    ofile2.close();
     
     
     
@@ -233,9 +239,7 @@ void processFrame(const cv::Mat& img, uchar* outputArray, int rows, int cols, co
 void saveAndShow(cv::Mat& input, cv::Mat& output, const std::string& tapType){
     cv::imshow("Imagen Original", input);
     cv::imshow("Imagen Reconstruida", output);
-    cv::waitKey(3000);
-    cv::destroyAllWindows();
-
+    cv::waitKey(0);
     //cv::imwrite((tapType + "_Original.png"), input);
     //cv::imwrite((tapType + "_Reconstruida.png"), output);
 }
