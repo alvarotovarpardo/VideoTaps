@@ -83,6 +83,7 @@ void openBinaryFile(const std::string& filename, cv::Mat& img, int rows, int col
 
 
 void applyDDR(uchar* input, uchar* output, int rows, int cols, const string& tapType){
+    std::cout << "En applyDDR\n";
     auto [R, T, L, Ry, Ty, Ly] = readTap(tapType);
     int simPixels = R*T*Ry*Ty;      // Pixeles simultáneos por ciclo
     //output.resize(rows*cols);     // Ajustamos el output al tamaño del frame
@@ -104,6 +105,7 @@ void applyDDR(uchar* input, uchar* output, int rows, int cols, const string& tap
         }
         p+= 2 * simPixels; // Siguiente ciclo (factor 2 : par/impar)
     }
+    std::cout << "Saliendo de normalizeImage\n";
 }
 
 // VideoTap Standard (sin DDR)
@@ -126,7 +128,7 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
     
     std::ofstream ofile1("step1.txt");
     std::ofstream ofile2("step2.txt");
-/*
+
     if(R != 1 || T != 1 || L != '\0'){
         if(L != '\0'){
             for(int i = 0; i < regionHeight; i++){
@@ -182,6 +184,19 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
         ofile1.close();
     }
 
+    size_t srcIndex = 0;
+    if(Ry != 1){
+        std::cout << "Hola\n";
+        for(int i = 0; i < rows; i+=2){ // Ry = 2 => mitad de filas
+            for(int j = 0; j < cols; j++){
+                for(int ry = 0; ry < Ry; ry++){
+                    int dstIndex = (i + ry) * cols + j; // TODO: parecido a 2X-1Y2, unificar
+                    bufferY[srcIndex++] = input[dstIndex];
+                }
+            }
+        }
+        memcpy(output, bufferY, rows * cols);
+    }
 
     if(Ty != 1){ 
         for (int i = 0; i < rows; i++){
@@ -193,22 +208,24 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
             }
         }
         memcpy(output, bufferY, rows * cols);
-    } else {
+    } 
+    /*else {
         memcpy(output, buffer, rows * cols);    
     } 
+    */
     ofile2.close();
- */   
-  
+    
+/*
     // 2X-1Y2
     size_t src = 0;
     if(Ty != 1){ 
-    for (int i = 0; i < rows; i += Ty) {          // bloques verticales de 2 filas: (i, i+1)
-        for (int j = 0; j < regionWidth; ++j) {   // columna dentro del bloque/región
-            for (int ty = 0; ty < Ty; ++ty) {         // región horizontal (0 izquierda, 1 derecha) ← LENTO
-                for (int r = 0; r < R; ++r) { // línea dentro del bloque (0,1) ← RÁPIDO
+    for (int i = 0; i < rows; i += Ty) {          
+        for (int j = 0; j < regionWidth; ++j) {   
+            for (int ty = 0; ty < Ty; ++ty) {     
+                for (int r = 0; r < R; ++r) { 
                     int dstRow = i + ty;
                     int dstCol = r * regionWidth + j;
-                    int dstIndex = dstRow * cols + dstCol;
+                    int dstIndex = (i + ty) * cols + r * regionWidth + j;
                     ofile1 << src << " " << dstIndex << "\n";
                     output[src++] = input[dstIndex];
                     
@@ -216,11 +233,11 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
                 } 
             }
         }
-        //memcpy(output, buffer, rows * cols);
+        memcpy(output, buffer, rows * cols);
     } else {
         memcpy(output, buffer, rows * cols);    
     } 
-
+*/
     ofile1.close();
 
     delete [] buffer; buffer = nullptr;
@@ -270,21 +287,26 @@ void saveAndShow(cv::Mat& input, cv::Mat& output, const std::string& tapType){
 int main() {
 
     cv::Mat img, img_norm16;
-    int rows = 480, cols = 640; // .bin
+    // DDR Videotap
+    int rows = 1024, cols = 1280; // .raw
+    openBinaryFile("C:/CODE/VideoTaps/src/input/0_DDR_1X2_1Y2_1280_1024.raw", img, rows, cols);
     
+
+    //int rows = 480, cols = 640; // .bin
     size_t frameSize = rows * cols * 2;
 
 
     std::string tapType; 
     std::cout << "Introduce Tap Geometry: "; std::getline(std::cin, tapType);
-    
-    openBinaryFile("C:/CODE/VideoTap_Refactor/src/input/" + tapType + ".bin", img, rows, cols);
+
+    // Std Videotap
+    //openBinaryFile("C:/CODE/VideoTap_Refactor/src/input/" + tapType + ".bin", img, rows, cols);
 
     img_norm16 = normalizeImage(img); // CV_16UC1 -> CV_8UC1
     cv::Mat img8; img_norm16.convertTo(img8, CV_8UC1, 1.0/256.0);
 
     std::unique_ptr<uchar[]> out(new uchar[rows*cols]);
-    processFrame(img8, out.get(), rows, cols, tapType, /*isDDR=*/false);
+    processFrame(img8, out.get(), rows, cols, tapType, /*isDDR=*/true);
 
     cv::Mat reconstructed(rows, cols, CV_8UC1, out.get());
     saveAndShow(img8, reconstructed, tapType);
