@@ -83,7 +83,6 @@ void openBinaryFile(const std::string& filename, cv::Mat& img, int rows, int col
 
 
 void applyDDR(uchar* input, uchar* output, int rows, int cols, const string& tapType){
-    std::cout << "En applyDDR\n";
     auto [R, T, L, Ry, Ty, Ly] = readTap(tapType);
     int simPixels = R*T*Ry*Ty;      // Pixeles simultáneos por ciclo
     //output.resize(rows*cols);     // Ajustamos el output al tamaño del frame
@@ -101,11 +100,10 @@ void applyDDR(uchar* input, uchar* output, int rows, int cols, const string& tap
         //input.read(reinterpret_cast<char*>(odd.data()), simPixels);
         for(int i = 0; i < simPixels; i++){
             uint16_t pix = reconstruirPixel(even[i], odd[i]);
-            output[n * simPixels + i] = static_cast<uchar>(pix); // (p >> 8)
+            output[n * simPixels + i] = static_cast<uchar>(pix >> 8); // (p >> 8)
         }
         p+= 2 * simPixels; // Siguiente ciclo (factor 2 : par/impar)
     }
-    std::cout << "Saliendo de normalizeImage\n";
 }
 
 // VideoTap Standard (sin DDR)
@@ -286,52 +284,53 @@ void saveAndShow(cv::Mat& input, cv::Mat& output, const std::string& tapType){
 
 int main() {
 
-    cv::Mat img, img_norm16;
+    cv::Mat img, img8, img_norm16;
     // DDR Videotap
-    int rows = 1024, cols = 1280; // .raw
-    openBinaryFile("C:/CODE/VideoTaps/src/input/0_DDR_1X2_1Y2_1280_1024.raw", img, rows, cols);
     
-
-    //int rows = 480, cols = 640; // .bin
-    size_t frameSize = rows * cols * 2;
-
+    std::string askDDR; 
+    std::cout << "Is DDR? (0/1): "; std::getline(std::cin, askDDR);
+    bool isDDR = (askDDR == "1");
 
     std::string tapType; 
     std::cout << "Introduce Tap Geometry: "; std::getline(std::cin, tapType);
+    int rows, cols;
+    std::string path;
 
-    // Std Videotap
-    //openBinaryFile("C:/CODE/VideoTap_Refactor/src/input/" + tapType + ".bin", img, rows, cols);
+    // Esto tiene que ver con la lectura de .raw, no debería afectar a la llegada de un frame en streaming
+    if(isDDR){
+        if(tapType == "4XR-1Y"){
+            rows = 240, cols = 320; // .raw Global Shutter
+        } else {
+            rows = 1024, cols = 1280; // .raw
+        }
+        path = "C:/CODE/VideoTaps/src/input/0_DDR_" + tapType + ".raw";
+        std::cout << "Rows: " << rows << "\nCols: " << cols << "\nPath: " << path << std::endl;
+        size_t frameSize = rows * cols * 2;
 
-    img_norm16 = normalizeImage(img); // CV_16UC1 -> CV_8UC1
-    cv::Mat img8; img_norm16.convertTo(img8, CV_8UC1, 1.0/256.0);
+        const size_t bytes = size_t(rows) * cols * 2;   // 2*N (pares+impares)
+        img8.create(1, int(bytes), CV_8UC1);  
+
+        std::ifstream f(path, std::ios::binary);
+        f.read(reinterpret_cast<char*>(img8.data), std::streamsize(bytes));
+        if (!f) { std::cerr << "Read failed\n"; return 1; }
+        
+    } else {
+        rows = 480, cols = 640; // .bin
+        path = "C:/CODE/VideoTaps/src/input/" + tapType + ".bin";
+        std::cout << "Rows: " << rows << "\nCols: " << cols << "\nPath: " << path << std::endl;
+        // Abrimos
+        openBinaryFile("C:/CODE/VideoTap_Refactor/src/input/" + tapType + ".bin", img, rows, cols);
+        // Normalizamos
+        img_norm16 = normalizeImage(img); // CV_16UC1 -> CV_8UC1
+        img_norm16.convertTo(img8, CV_8UC1, 1.0/256.0);
+
+    }
 
     std::unique_ptr<uchar[]> out(new uchar[rows*cols]);
-    processFrame(img8, out.get(), rows, cols, tapType, /*isDDR=*/true);
+    processFrame(img8, out.get(), rows, cols, tapType, isDDR);
 
     cv::Mat reconstructed(rows, cols, CV_8UC1, out.get());
     saveAndShow(img8, reconstructed, tapType);
-
-/*
-    // Guardar la primera fila de img_normalizada en un archivo .txt
-    std::ofstream outFile(tapType + "_primera_fila.txt");
-    if (outFile.is_open()) {
-        for (int col = 0; col < cols; ++col) {
-            outFile << static_cast<int>(img_normalizada.at<uchar>(0, col));
-            if (col < cols - 1) outFile << " ";
-        }
-        outFile.close();
-        std::cout << "Primera fila guardada en " << tapType + "_primera_fila.txt" << std::endl;
-    } else {
-        std::cerr << "No se pudo abrir el archivo para escritura." << std::endl;
-    }
-
-
-    //vector<string> testTaps = {"2X2", "4X", "2X2-1Y4", "2X2E-1Y2M"};
-
-    auto [R, T, L, R2, T2, L2] = readTap(tapType);
-    cout << "Tap: " << tapType << " -> R: " << R << ", T: " << T << ", L: " << L
-         << " | R2: " << R2 << ", T2: " << T2 << ", L2: " << L2 << endl;
-*/
     
     return 0;
 }
