@@ -182,35 +182,35 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
         ofile1.close();
     }
 
-    size_t srcIndex = 0;
-    if(Ry != 1){
-        std::cout << "Hola\n";
-        for(int i = 0; i < rows; i+=2){ // Ry = 2 => mitad de filas
-            for(int j = 0; j < cols; j++){
-                for(int ry = 0; ry < Ry; ry++){
-                    int dstIndex = (i + ry) * cols + j; // TODO: parecido a 2X-1Y2, unificar
-                    bufferY[srcIndex++] = input[dstIndex];
+    if(Ry != 1 || Ty != 1){
+        if(Ry != 1){
+            size_t srcIndex = 0;
+            for(int i = 0; i < rows; i+=2){ // Ry = 2 => mitad de filas
+                for(int j = 0; j < cols; j++){
+                    for(int ry = 0; ry < Ry; ry++){
+                        int dstIndex = (i + ry) * cols + j; // TODO: parecido a 2X-1Y2, unificar
+                        bufferY[srcIndex++] = input[dstIndex];
+                    }
                 }
             }
+            memcpy(output, bufferY, rows * cols);
         }
-        memcpy(output, bufferY, rows * cols);
-    }
 
-    if(Ty != 1){ 
-        for (int i = 0; i < rows; i++){
-            for(int j = 0; j < cols; j++){
-                int srcIndex = (i * cols) + j;
-                int dstIndex = ((i - (i % 2)) * cols) + (2 * j + (i % 2));
-                bufferY[dstIndex] = buffer[srcIndex];
-                ofile2 << srcIndex << " " << dstIndex << "\n";
+        if(Ty != 1){ 
+            for (int i = 0; i < rows; i++){
+                for(int j = 0; j < cols; j++){
+                    int srcIndex = (i * cols) + j;
+                    int dstIndex = ((i - (i % 2)) * cols) + (2 * j + (i % 2));
+                    bufferY[dstIndex] = buffer[srcIndex];
+                    ofile2 << srcIndex << " " << dstIndex << "\n";
+                }
             }
+            memcpy(output, bufferY, rows * cols);
         }
-        memcpy(output, bufferY, rows * cols);
-    } 
-    /*else {
+    } else { 
         memcpy(output, buffer, rows * cols);    
     } 
-    */
+        
     ofile2.close();
     
 /*
