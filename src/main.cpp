@@ -84,97 +84,91 @@ void openBinaryFile(const std::string& filename, cv::Mat& img, int rows, int col
 
 void applyDDR(const uint8_t* input, uint16_t* out16, int rows, int cols, const string& tapType){
     auto [R, T, L, Ry, Ty, Ly] = readTap(tapType);
-    int simPixels = R*T*Ry*Ty;      // Pixeles simultáneos por ciclo
-    size_t cycles = rows*cols / simPixels; // Ciclos 'enviados'
-    std::vector<uint8_t> even(simPixels), odd(simPixels);
+    int simPixels = R * T * Ry * Ty;
+    size_t cycles = size_t(rows) * cols / simPixels;
     
-
+    std::vector<uint8_t> even(simPixels), odd(simPixels);
     const uint8_t* p = input;
 
     // Tenemos que permutar cada ciclo por el orden de llegada de los píxeles
     std::vector<int> perm(simPixels);
     for(int i = 0; i < simPixels; i++) perm[i] = i; // Permutación identidad
 
-        
+/*        
    // 1) 1X2-1Y2  → ciclo llega como [p10, p00, p11, p01] // TAP quiere [p00,p01,p10,p11]
-    if (R==1 && T==2 && Ry==1 && Ty==2 && simPixels==4) { int m[4]={3,0,4,1}; for(int i=0;i<4;++i) perm[i]=m[i]; }
+    if (R==1 && T==2 && Ry==1 && Ty==2 && simPixels==4) { int m[4]={2,0,3,1}; for(int i=0;i<4;++i) perm[i]=m[i]; }
     // 2) 1X-2Y    → ciclo llega como [up, down], // TAP quiere [up, down]
     if (R==1 && T==1 && Ry==1 && Ty==2 && simPixels==2) { int m[2]={1,0};     for(int i=0;i<2;++i) perm[i]=m[i]; }
     // 3) 4XR-1Y   → ciclo llega como [1,0,3,2] (swap en cada pareja de R/2)
     if (R==4 && T==1 && Ry==1 && Ty==1 && simPixels==4){ int m[4]={1,0,3,2};  for(int i=0;i<4;++i) perm[i]=m[i]; }
-
-    // For each cycle...
-    for(int n = 0; n < cycles; n++){
-        
+*/
+    for(int n = 0; n < cycles; n++){      
         // ---- CICLO 1: bits PARES ----
-        std::memcpy(even.data(), p, simPixels);
-        p += simPixels;
-
+        std::memcpy(even.data(), p, simPixels); p += simPixels;
         // ---- CICLO 2: bits IMPARES ----
-        std::memcpy(odd.data(), p, simPixels);
-        p += simPixels;
+        std::memcpy(odd.data(), p, simPixels);  p += simPixels;
 
         
         for(int i = 0; i < simPixels; i++){
             int k = perm[i]; // Ajustamos orden de llegada
-            uint16_t pix = reconstruirPixel(even[k], odd[k]);
-            out16[n * simPixels + i] = pix; 
+            out16[n * simPixels + i] = reconstruirPixel(even[k], odd[k]);
         }
     }
 
 }
 
 // VideoTap Standard (sin DDR)
-void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tapType) {
-    auto [R, T, L, Ry, Ty, Ly] = readTap(tapType);
+template<typename T>
+void applyTap(const T* input, T* output, int rows, int cols, const string& tapType) {
+    auto [Rx, Tx, Lx, Ry, Ty, Ly] = readTap(tapType);
 
-    int regionWidth = cols / R;
-    int tapsNumber = regionWidth / T; 
-    int regionHeight = rows / Ry;
-    int tapsNumberY = regionHeight / Ty;
+    const int regionWidth = cols / Rx;
+    const int tapsX = regionWidth / Tx; 
+    const int regionHeight = rows / Ry;
+    const int tapsY = regionHeight / Ty;
     
-    uchar* bufferX = new uchar[rows * cols];
-    memcpy(bufferX, input, rows * cols);
-    
-    uchar* bufferY = new uchar[rows * cols];
-    memcpy(bufferY, input, rows * cols);
+    // buffers en T
+    std::unique_ptr<T[]> bufferX(new T[rows * cols]);
+    std::unique_ptr<T[]> bufferY(new T[rows * cols]);
+    std::unique_ptr<T[]> buffer (new T[rows * cols]);
 
-    uchar* buffer = new uchar[rows * cols];
-    memcpy(buffer, input, rows * cols);
+    std::memcpy(bufferX.get(), input,  size_t(rows)*cols*sizeof(T));
+    std::memcpy(bufferY.get(), input,  size_t(rows)*cols*sizeof(T));
+    std::memcpy(buffer .get(), input,  size_t(rows)*cols*sizeof(T));
     
     std::ofstream ofile1("step1.txt");
     std::ofstream ofile2("step2.txt");
 
-    if(R != 1 || T != 1 || L != '\0'){
-        if(L != '\0'){
+    if(Rx != 1 || Tx != 1 || Lx != '\0'){
+        if(Lx != '\0'){
             for(int i = 0; i < regionHeight; i++){
-                for(int r = 0; r < R; r++){
-                    for(int j = 0; j < tapsNumber; j++){
-                        for(int t = 0; t < T; t++){
-                            int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
-                            if(L == 'E'){
-                                if(r >= R/2){
-                                    if(R == 2){
-                                        int dstIndex = (i * cols) + (regionWidth * (r + 1) - (T * j + t + 1));    
+                for(int r = 0; r < Rx; r++){
+                    for(int j = 0; j < tapsX; j++){
+                        for(int t = 0; t < Tx; t++){
+                            int srcIndex = (i * cols) + (r * regionWidth + j * Tx + t);
+                            if(Lx == 'E'){
+                                if(r >= Rx/2){
+                                    if(Rx == 2){
+                                        int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * j + t + 1));    
                                         bufferX[dstIndex] = input[srcIndex];
                                     } else {
-                                        int dstIndex = (i * cols) + (regionWidth * (r + 1) - (T * (j + 1) - t));
+                                        int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * (j + 1) - t));
                                         bufferX[dstIndex] = input[srcIndex];                                
                                     }
                                 } else {
-                                    int dstIndex = (i * cols) + r * regionWidth + j * T + t;
+                                    int dstIndex = (i * cols) + r * regionWidth + j * Tx + t;
                                     bufferX[dstIndex] = input[srcIndex];
                                 }
-                            } else if (L == 'M'){
-                                if(r >= R/2){
-                                    int dstIndex = (i * cols) + r * regionWidth + j * T + t;
+                            } else if (Lx == 'M'){
+                                if(r >= Rx/2){
+                                    int dstIndex = (i * cols) + r * regionWidth + j * Tx + t;
                                     bufferX[dstIndex] = input[srcIndex];
                                 } else {
-                                    int dstIndex = (i * cols) + (regionWidth * (r + 1) - (T * (j + 1) - t));
+                                    int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * (j + 1) - t));
                                     bufferX[dstIndex] = input[srcIndex];
                                 }
-                            } else if (L == 'R'){
-                                int dstIndex = (i * cols) + (regionWidth * (r + 1) - (T * (j + 1) - t));
+                            } else if (Lx == 'R'){
+                                int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * (j + 1) - t));
                                 bufferX[dstIndex] = input[srcIndex];
 
                             }
@@ -182,15 +176,15 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
                     }
                 }
             }
-            L = '\0';
+            // Lx = '\0';
         }
     
         for (int i = 0; i < regionHeight; i++){
-            for (int r = 0; r < R; r++){
-                for (int j = 0; j < tapsNumber; j++){
-                    for (int t = 0; t < T; t++){
-                        int srcIndex = (i * cols) + (r * regionWidth + j * T + t);
-                        int dstIndex = (i * cols) + (T * (j * R + r) + t);
+            for (int r = 0; r < Rx; r++){
+                for (int j = 0; j < tapsX; j++){
+                    for (int t = 0; t < Tx; t++){
+                        int srcIndex = (i * cols) + (r * regionWidth + j * Tx + t);
+                        int dstIndex = (i * cols) + (Tx * (j * Rx + r) + t);
                         buffer[dstIndex] = bufferX[srcIndex];
                         ofile1 << srcIndex << " " << dstIndex << "\n";
                     }
@@ -211,7 +205,7 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
                     }
                 }
             }
-            memcpy(output, bufferY, rows * cols);
+            std::memcpy(output, bufferY.get(), size_t(rows) * cols * sizeof(T));
         }
 
         if(Ty != 1){ 
@@ -223,42 +217,14 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
                     ofile2 << srcIndex << " " << dstIndex << "\n";
                 }
             }
-            memcpy(output, bufferY, rows * cols);
+            std::memcpy(output, bufferY.get(), size_t(rows) * cols * sizeof(T));
         }
     } else { 
-        memcpy(output, buffer, rows * cols);    
+        std::memcpy(output, buffer.get(), size_t(rows)*cols*sizeof(T));  
     } 
         
     ofile2.close();
-    
-/*
-    // 2X-1Y2
-    size_t src = 0;
-    if(Ty != 1){ 
-    for (int i = 0; i < rows; i += Ty) {          
-        for (int j = 0; j < regionWidth; ++j) {   
-            for (int ty = 0; ty < Ty; ++ty) {     
-                for (int r = 0; r < R; ++r) { 
-                    int dstRow = i + ty;
-                    int dstCol = r * regionWidth + j;
-                    int dstIndex = (i + ty) * cols + r * regionWidth + j;
-                    ofile1 << src << " " << dstIndex << "\n";
-                    output[src++] = input[dstIndex];
-                    
-                    }
-                } 
-            }
-        }
-        memcpy(output, buffer, rows * cols);
-    } else {
-        memcpy(output, buffer, rows * cols);    
-    } 
-*/
     ofile1.close();
-
-    delete [] buffer; buffer = nullptr;
-    delete [] bufferX; bufferX = nullptr;
-    delete [] bufferY; bufferY = nullptr;
 }
 
 cv::Mat normalizeImage(const cv::Mat& img) {
@@ -275,23 +241,24 @@ cv::Mat normalizeImage(const cv::Mat& img) {
     return out;
 }
 
-/*
-void processFrame(const cv::Mat& img, uint16_t* outputArray, int rows, int cols, const std::string& tapType, bool isDDR) {
-    uchar* inputArray = img.data;
+
+void processFrame(const cv::Mat& img, uint16_t* out16, int rows, int cols, const std::string& tapType, bool isDDR)
+{
     const size_t N = size_t(rows) * cols;
-    // buffer intermedio
-    std::unique_ptr<uchar[]> tmp(new uchar[N]);
-    memset(tmp.get(), 0, N);
 
-    if(isDDR){
-        applyDDR(inputArray, outputArray, rows, cols, tapType);
+    if (isDDR) {
+        // Esperamos 2*N bytes (pares+impares)
+        CV_Assert(img.type() == CV_8UC1 && img.total() == 2*N);
+        std::vector<uint16_t> linear(N); // orden de llegada
+        applyDDR(img.ptr<uint8_t>(), linear.data(), rows, cols, tapType);
+        applyTap<uint16_t>(linear.data(), out16, rows, cols, tapType);
     } else {
-        applyTap(inputArray, outputArray, rows, cols, tapType);
+        // Esperamos imagen 16b en orden "lineal" (o del tap de origen)
+        CV_Assert(img.type() == CV_16UC1 && img.total() == N);
+        applyTap<uint16_t>(img.ptr<uint16_t>(), out16, rows, cols, tapType);
     }
-
-    
 }
-*/
+
 void saveAndShow(cv::Mat& input, cv::Mat& output, const std::string& tapType){
     cv::imshow("Imagen Original", input);
     cv::imshow("Imagen Reconstruida", output);
@@ -324,19 +291,19 @@ int main() {
         path = "C:/CODE/VideoTaps/src/input/0_DDR_" + tapType + ".raw";
         std::cout << "Rows: " << rows << "\nCols: " << cols << "\nPath: " << path << std::endl;
 
-        const size_t bytes = size_t(rows) * cols * 2;   // 2*N (pares+impares)
-        img8.create(1, int(bytes), CV_16UC1);  
-
+        const size_t N = size_t(rows) * cols;
+        const size_t bytes = 2*N;   // (pares+impares)
+        cv::Mat rawBytes(1, int(bytes), CV_16UC1);  
         std::ifstream f(path, std::ios::binary);
         f.read(reinterpret_cast<char*>(img8.data), std::streamsize(bytes));
         if (!f) { std::cerr << "Read failed\n"; return 1; }
-        std::vector<uint16_t> out16(size_t(rows) * cols);
-        applyDDR(img8.ptr<uint8_t>(), out16.data(), rows, cols, tapType);
 
-        // ver como 16-bit y también en 8-bit
+        std::vector<uint16_t> out16(N);
+        processFrame(rawBytes, out16.data(), rows, cols, tapType, isDDR);
+
         cv::Mat recon16(rows, cols, CV_16UC1, out16.data());
 
-        // Normaliza (o simplemente baja 8 bits)
+        // Normaliza
         double minV, maxV;
         cv::minMaxLoc(recon16, &minV, &maxV);
         cv::Mat recon8;
@@ -346,29 +313,25 @@ int main() {
             recon16.convertTo(recon8, CV_8UC1, 1.0/256.0);
         }
 
-        // Mostrar solo la reconstruida (la “original” de DDR no es imagen 2D)
         cv::imshow("Imagen Reconstruida (8-bit)", recon8);
-        cv::waitKey(0);
-            
+        cv::waitKey(0);            
         
     } else {
         return 0;
-        /*
+        
         rows = 480, cols = 640; // .bin
         path = "C:/CODE/VideoTaps/src/input/" + tapType + ".bin";
         std::cout << "Rows: " << rows << "\nCols: " << cols << "\nPath: " << path << std::endl;
         // Abrimos
-        openBinaryFile("C:/CODE/VideoTap_Refactor/src/input/" + tapType + ".bin", img, rows, cols);
-        // Normalizamos
-        img_norm16 = normalizeImage(img); // CV_16UC1 -> CV_8UC1
-        img_norm16.convertTo(img8, CV_8UC1, 1.0/256.0);
-        std::unique_ptr<uchar[]> out(new uchar[rows*cols]);
-        processFrame(img8, out.get(), rows, cols, tapType, isDDR);
+        cv::Mat img16;
+        openBinaryFile("C:/CODE/VideoTap_Refactor/src/input/" + tapType + ".bin", img16, rows, cols);
+        
+        std::vector<uint16_t> out16(size_t(rows)*cols);
+        processFrame(img16, out16.data(), rows, cols, tapType, isDDR);
 
-        cv::Mat reconstructed(rows, cols, CV_8UC1, out.get());
-        saveAndShow(img8, reconstructed, tapType);
-    */
+        cv::Mat recon16(rows, cols, CV_16UC1, out16.data());
 
+        saveAndShow(img8, recon16, tapType);
     }
 
 
