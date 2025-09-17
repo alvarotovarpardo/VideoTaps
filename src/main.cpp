@@ -81,6 +81,72 @@ void openBinaryFile(const std::string& filename, cv::Mat& img, int rows, int col
     if (size_t(file.gcount()) != need) throw std::runtime_error("Lectura incompleta");
 }
 
+void DDR_1X_2Y(const uint8_t* input, uint16_t* out16, int rows, int cols){
+        
+    std::vector<uint8_t> even(2), odd(2);
+    const uint8_t* p = input;
+
+    for (int i = 0; i < rows; i += 2) {
+        for (int j = 0; j < cols; j++) {
+            std::memcpy(even.data(), p, 2); p += 2;
+            std::memcpy(odd.data(),  p, 2); p += 2;
+
+            uint16_t pUp = reconstruirPixel(even[0], odd[0]); 
+            uint16_t pDown = reconstruirPixel(even[1], odd[1]); 
+
+            out16[i*cols + j]         = pDown;
+            out16[(i+1)*cols + j]     = pUp;
+        }
+    }
+}
+
+void DDR_1X2_1Y2(const uint8_t* input, uint16_t* out16, int rows, int cols){
+        
+    std::vector<uint8_t> even(4), odd(4);
+    const uint8_t* p = input;
+
+    for (int i = 0; i < rows; i += 2) {
+        for (int j = 0; j < cols; j += 2) {
+            std::memcpy(even.data(), p, 4); p += 4;
+            std::memcpy(odd.data(),  p, 4); p += 4;
+            
+            // (im)pares[0] → (1,0), (im)pares[1] → (0,0), (im)pares[2] → (1,1), (im)pares[3] → (0,1)
+            uint16_t p10 = reconstruirPixel(even[0], odd[0]);
+            uint16_t p00 = reconstruirPixel(even[1], odd[1]);
+            uint16_t p11 = reconstruirPixel(even[2], odd[2]);
+            uint16_t p01 = reconstruirPixel(even[3], odd[3]);
+
+            out16[i      * cols + (j    )] = p00;  // (0,0)
+            out16[(i + 1)* cols + (j    )] = p10;  // (1,0)
+            out16[i      * cols + (j + 1)] = p01;  // (0,1)
+            out16[(i + 1)* cols + (j + 1)] = p11;  // (1,1)
+        }
+    }
+}
+
+void DDR_4XR_1Y(const uint8_t* input, uint16_t* out16, int rows, int cols){
+        
+    std::vector<uint8_t> even(4), odd(4);
+    const uint8_t* p = input;
+    
+    int regionWidth = cols / 4;       // 80   
+    const int regionOrder[4] = {2, 1, 4, 3}; // Orden de llegada: 159, 79, 319, 239, 158, 78, 318, 238, ...
+
+    for (int i = 0; i < rows; i++) {
+        // cada j agrupa 4 píxeles (uno por cada canal/región)
+        for (int j = 0; j < regionWidth; j++) {
+            std::memcpy(even.data(), p, 4); p += 4;
+            std::memcpy(odd.data(),  p, 4); p += 4;
+            
+            for (int r = 0; r < 4; ++r) {
+                int region = regionOrder[r];
+                int col = region * regionWidth - j - 1;
+                size_t idx = i * cols + col;    // posición en el array lineal
+                out16[idx] = reconstruirPixel(even[r], odd[r]);
+            }
+        }
+    }
+}
 
 void applyDDR(const uint8_t* input, uint16_t* out16, int rows, int cols, const std::string& tapType)
 {
@@ -89,6 +155,13 @@ void applyDDR(const uint8_t* input, uint16_t* out16, int rows, int cols, const s
     const size_t N = size_t(rows) * cols;
     const size_t cycles = N / simPixels;
 
+
+    if (R==1 && T==2 && Ry==1 && Ty==2) {DDR_1X2_1Y2(input, out16, rows, cols); return;}
+    if (R==1 && T==1 && Ry==2 && Ty==1) {DDR_1X_2Y(input, out16, rows, cols); return;}
+    if (R==4 && T==1 && Ry==1 && Ty==1) {DDR_4XR_1Y(input, out16, rows, cols); return;}
+
+
+/*
     std::vector<uint8_t> even(simPixels), odd(simPixels);
     const uint8_t* p = input;
 
@@ -100,6 +173,7 @@ void applyDDR(const uint8_t* input, uint16_t* out16, int rows, int cols, const s
             out16[n * simPixels + i] = reconstruirPixel(even[i], odd[i]);
         }
     }
+*/
 }
 
 
@@ -235,11 +309,9 @@ void processFrame(const cv::Mat& img, uint16_t* out16, int rows, int cols, const
     if (isDDR) {
         // Esperamos 2*N bytes (pares+impares)
         CV_Assert(img.type() == CV_8UC1 && img.total() == 2*N);
-        std::vector<uint16_t> linear(N); // orden de llegada
-        applyDDR(img.ptr<uint8_t>(), linear.data(), rows, cols, tapType);
-        applyTap<uint16_t>(linear.data(), out16, rows, cols, tapType);
+        applyDDR(img.ptr<uint8_t>(), out16, rows, cols, tapType);  
+        //applyTap<uint16_t>(linear.data(), out16, rows, cols, tapType);
     } else {
-        // Esperamos imagen 16b en orden "lineal" (o del tap de origen)
         CV_Assert(img.type() == CV_16UC1 && img.total() == N);
         applyTap<uint16_t>(img.ptr<uint16_t>(), out16, rows, cols, tapType);
     }
