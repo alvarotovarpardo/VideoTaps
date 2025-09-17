@@ -82,68 +82,31 @@ void openBinaryFile(const std::string& filename, cv::Mat& img, int rows, int col
 }
 
 
-void applyDDR(const uint8_t* input, uint16_t* out16, int rows, int cols, const string& tapType){
+void applyDDR(const uint8_t* input, uint16_t* out16, int rows, int cols, const std::string& tapType)
+{
     auto [R, T, L, Ry, Ty, Ly] = readTap(tapType);
-    int simPixels = R * T * Ry * Ty;
-    size_t cycles = size_t(rows) * cols / simPixels;
-    
+    const int simPixels = R * T * Ry * Ty;          // 4 en 1X2-1Y2
+    const size_t N = size_t(rows) * cols;
+    const size_t cycles = N / simPixels;
+
     std::vector<uint8_t> even(simPixels), odd(simPixels);
     const uint8_t* p = input;
 
-    // Tenemos que permutar cada ciclo por el orden de llegada de los píxeles
-    std::vector<int> perm(simPixels);
-    for(int i = 0; i < simPixels; i++) perm[i] = i; // Permutación identidad
-
-        
-   // 1) 1X2-1Y2  → ciclo llega como [p10, p00, p11, p01] // TAP quiere [p00,p01,p10,p11]
-    if (R==1 && T==2 && Ry==1 && Ty==2 && simPixels==4) { int m[4]={1,3,0,2}; for(int i=0;i<4;++i) perm[i]=m[i]; }
-    // 2) 1X-2Y    → ciclo llega como [up, down], // TAP quiere [up, down]
-    if (R==1 && T==1 && Ry==1 && Ty==2 && simPixels==2) { int m[2]={1,0};     for(int i=0;i<2;++i) perm[i]=m[i]; }
-    // 3) 4XR-1Y   → ciclo llega como [1,0,3,2] (swap en cada pareja de R/2)
-    if (R==4 && T==1 && Ry==1 && Ty==1 && simPixels==4){ int m[4]={1,0,3,2};  for(int i=0;i<4;++i) perm[i]=m[i]; }
-
-    for(int n = 0; n < cycles; n++){      
-        // ---- CICLO 1: bits PARES ----
+    // Para 1X2-1Y2 dejamos identidad: [p10,p00,p11,p01] tal cual.
+    for (size_t n = 0; n < cycles; ++n) {
         std::memcpy(even.data(), p, simPixels); p += simPixels;
-        // ---- CICLO 2: bits IMPARES ----
-        std::memcpy(odd.data(), p, simPixels);  p += simPixels;
-
-        
-        for(int i = 0; i < simPixels; i++){
-            int k = perm[i]; // Ajustamos orden de llegada
-            out16[n * simPixels + i] = reconstruirPixel(even[k], odd[k]);
+        std::memcpy(odd.data(),  p, simPixels); p += simPixels;
+        for (int i = 0; i < simPixels; ++i) {
+            out16[n * simPixels + i] = reconstruirPixel(even[i], odd[i]);
         }
     }
-
 }
+
 
 // VideoTap Standard (sin DDR)
 template<typename T>
 void applyTap(const T* input, T* output, int rows, int cols, const string& tapType) {
     auto [Rx, Tx, Lx, Ry, Ty, Ly] = readTap(tapType);
-
-
-    if (Rx==1 && Tx==2 && Lx=='\0' && Ry==1 && Ty==2 && Ly=='\0') {
-        const int bxN = cols / 2;
-        const int byN = rows / 2;
-        size_t b = 0;
-        for (int by = 0; by < byN; ++by) {
-            const int r0 = 2*by;
-            const int r1 = r0 + 1;
-            for (int bx = 0; bx < bxN; ++bx, ++b) {
-                const int c0 = 2*bx;
-                const int c1 = c0 + 1;
-                const size_t base = b * 4;  // bloque canónico
-
-                // [p00,p01,p10,p11]
-                output[r0 * cols + c0] = input[base + 0];   // p00
-                output[r0 * cols + c1] = input[base + 1];   // p01
-                output[r1 * cols + c0] = input[base + 2];   // p10
-                output[r1 * cols + c1] = input[base + 3];   // p11
-            }
-        }
-        return; // terminamos aquí para 1X2-1Y2 DDR
-    }
 
     const int regionWidth = cols / Rx;
     const int tapsX = regionWidth / Tx; 
@@ -237,7 +200,7 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
                     int srcIndex = (i * cols) + j;
                     int dstIndex = ((i - (i % 2)) * cols) + (2 * j + (i % 2));
                     bufferY[dstIndex] = buffer[srcIndex];
-                    ofile2 << srcIndex << " " << dstIndex << "\n";
+                    ofile2 << i << " " << j << " " << srcIndex << " || " << dstIndex << "\n";
                 }
             }
             std::memcpy(output, bufferY.get(), size_t(rows) * cols * sizeof(T));
