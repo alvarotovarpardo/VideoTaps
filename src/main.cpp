@@ -201,7 +201,7 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
                 for(int j = 0; j < cols; j++){
                     for(int ry = 0; ry < Ry; ry++){
                         int dstIndex = (i + ry) * cols + j; // TODO: parecido a 2X-1Y2, unificar
-                        bufferY[srcIndex++] = input[dstIndex];
+                        bufferY[srcIndex++] = buffer[dstIndex];
                     }
                 }
             }
@@ -291,11 +291,11 @@ int main() {
         path = "C:/CODE/VideoTaps/src/input/0_DDR_" + tapType + ".raw";
         std::cout << "Rows: " << rows << "\nCols: " << cols << "\nPath: " << path << std::endl;
 
-        const size_t N = size_t(rows) * cols;
-        const size_t bytes = 2*N;   // (pares+impares)
-        cv::Mat rawBytes(1, int(bytes), CV_16UC1);  
+        const size_t N = size_t(rows)*cols;
+        const size_t bytes = 2*N;
+        cv::Mat rawBytes(1, int(bytes), CV_8UC1);
         std::ifstream f(path, std::ios::binary);
-        f.read(reinterpret_cast<char*>(img8.data), std::streamsize(bytes));
+        f.read(reinterpret_cast<char*>(rawBytes.data), std::streamsize(bytes));
         if (!f) { std::cerr << "Read failed\n"; return 1; }
 
         std::vector<uint16_t> out16(N);
@@ -316,9 +316,7 @@ int main() {
         cv::imshow("Imagen Reconstruida (8-bit)", recon8);
         cv::waitKey(0);            
         
-    } else {
-        return 0;
-        
+    } else {        
         rows = 480, cols = 640; // .bin
         path = "C:/CODE/VideoTaps/src/input/" + tapType + ".bin";
         std::cout << "Rows: " << rows << "\nCols: " << cols << "\nPath: " << path << std::endl;
@@ -330,8 +328,9 @@ int main() {
         processFrame(img16, out16.data(), rows, cols, tapType, isDDR);
 
         cv::Mat recon16(rows, cols, CV_16UC1, out16.data());
-
-        saveAndShow(img8, recon16, tapType);
+        cv::Mat recon16norm = normalizeImage(recon16); // Output normalizado
+        cv::Mat img16norm   = normalizeImage(img16);   // Input normalizado
+        saveAndShow(img16norm, recon16norm, tapType);
     }
 
 
