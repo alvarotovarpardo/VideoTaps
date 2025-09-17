@@ -103,48 +103,25 @@ void applyDDR(const uint8_t* input, uint16_t* out16, int rows, int cols, const s
     // 3) 4XR-1Y   → ciclo llega como [1,0,3,2] (swap en cada pareja de R/2)
     if (R==4 && T==1 && Ry==1 && Ty==1 && simPixels==4){ int m[4]={1,0,3,2};  for(int i=0;i<4;++i) perm[i]=m[i]; }
 
-    for(int row = 0; row < rows; row+=2){
-        for(int col = 0; col < cols; col+=2){
-
-            // ---- CICLO 1: bits PARES ----
-            std::memcpy(even.data(), p, simPixels);
-            p += simPixels;
-
-            // ---- CICLO 2: bits IMPARES ----
-            std::memcpy(odd.data(), p, simPixels);
-            p += simPixels;
-
-            uint16_t p10 = reconstruirPixel(even[0], odd[0]);
-            uint16_t p00 = reconstruirPixel(even[1], odd[1]);
-            uint16_t p11 = reconstruirPixel(even[2], odd[2]);
-            uint16_t p01 = reconstruirPixel(even[3], odd[3]);
-            out16[row    * cols + (col    )] = p00;  // (0,0)
-            out16[(row+1)* cols + (col    )] = p10;  // (1,0)
-            out16[row    * cols + (col + 1)] = p01;  // (0,1)
-            out16[(row+1)* cols + (col + 1)] = p11;  // (1,1)
-
-        }
-    } 
-
-
-/*
     // For each cycle...
     for(int n = 0; n < cycles; n++){
         
-        // CICLO 1: Píxeles pares
-        uint8_t* even = p;
+        // ---- CICLO 1: bits PARES ----
+        std::memcpy(even.data(), p, simPixels);
+        p += simPixels;
 
-        // CICLO 2: Píxeles impares
-        uint8_t* odd = p + simPixels;
+        // ---- CICLO 2: bits IMPARES ----
+        std::memcpy(odd.data(), p, simPixels);
+        p += simPixels;
+
         
         for(int i = 0; i < simPixels; i++){
             int k = perm[i]; // Ajustamos orden de llegada
             uint16_t pix = reconstruirPixel(even[k], odd[k]);
-            output[n * simPixels + i] = static_cast<uchar>(pix >> 8); // (p >> 8)
+            out16[n * simPixels + i] = pix; 
         }
-        p+= 2 * simPixels; // Siguiente ciclo (factor 2 : par/impar)
     }
-*/
+
 }
 
 // VideoTap Standard (sin DDR)
@@ -348,7 +325,7 @@ int main() {
         std::cout << "Rows: " << rows << "\nCols: " << cols << "\nPath: " << path << std::endl;
 
         const size_t bytes = size_t(rows) * cols * 2;   // 2*N (pares+impares)
-        img8.create(1, int(bytes), CV_8UC1);  
+        img8.create(1, int(bytes), CV_16UC1);  
 
         std::ifstream f(path, std::ios::binary);
         f.read(reinterpret_cast<char*>(img8.data), std::streamsize(bytes));
