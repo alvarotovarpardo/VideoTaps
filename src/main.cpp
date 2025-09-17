@@ -82,40 +82,69 @@ void openBinaryFile(const std::string& filename, cv::Mat& img, int rows, int col
 }
 
 
-void applyDDR(uchar* input, uchar* output, int rows, int cols, const string& tapType){
+void applyDDR(const uint8_t* input, uint16_t* out16, int rows, int cols, const string& tapType){
     auto [R, T, L, Ry, Ty, Ly] = readTap(tapType);
     int simPixels = R*T*Ry*Ty;      // Pixeles simultáneos por ciclo
     size_t cycles = rows*cols / simPixels; // Ciclos 'enviados'
-
     std::vector<uint8_t> even(simPixels), odd(simPixels);
-    const uint8_t* p = reinterpret_cast<const uint8_t*>(input);
+    
+
+    const uint8_t* p = input;
 
     // Tenemos que permutar cada ciclo por el orden de llegada de los píxeles
     std::vector<int> perm(simPixels);
     for(int i = 0; i < simPixels; i++) perm[i] = i; // Permutación identidad
-    std::vector<uint16_t> pixeles(rows * cols, 0);
-/*
+
+        
    // 1) 1X2-1Y2  → ciclo llega como [p10, p00, p11, p01] // TAP quiere [p00,p01,p10,p11]
-    if (R==1 && T==2 && Ry==1 && Ty==2 && simPixels==4) { int m[4]={1,0,3,2}; for(int i=0;i<4;++i) perm[i]=m[i]; }
+    if (R==1 && T==2 && Ry==1 && Ty==2 && simPixels==4) { int m[4]={3,0,4,1}; for(int i=0;i<4;++i) perm[i]=m[i]; }
     // 2) 1X-2Y    → ciclo llega como [up, down], // TAP quiere [up, down]
     if (R==1 && T==1 && Ry==1 && Ty==2 && simPixels==2) { int m[2]={1,0};     for(int i=0;i<2;++i) perm[i]=m[i]; }
     // 3) 4XR-1Y   → ciclo llega como [1,0,3,2] (swap en cada pareja de R/2)
     if (R==4 && T==1 && Ry==1 && Ty==1 && simPixels==4){ int m[4]={1,0,3,2};  for(int i=0;i<4;++i) perm[i]=m[i]; }
-*/
 
-    // For each cycle...
-    for(int n = 0; n < cycles; n++){
-        std::memcpy(even.data(), p,              simPixels);
-        std::memcpy(odd .data(), p + simPixels,  simPixels);
-        p += 2 * simPixels;
+    for(int row = 0; row < rows; row+=2){
+        for(int col = 0; col < cols; col+=2){
 
-        for (int i = 0; i < simPixels; ++i) {
-            uint16_t pix = reconstruirPixel(even[i], odd[i]);
-            pixeles[n * simPixels + i] = pix;
+            // ---- CICLO 1: bits PARES ----
+            std::memcpy(even.data(), p, simPixels);
+            p += simPixels;
+
+            // ---- CICLO 2: bits IMPARES ----
+            std::memcpy(odd.data(), p, simPixels);
+            p += simPixels;
+
+            uint16_t p10 = reconstruirPixel(even[0], odd[0]);
+            uint16_t p00 = reconstruirPixel(even[1], odd[1]);
+            uint16_t p11 = reconstruirPixel(even[2], odd[2]);
+            uint16_t p01 = reconstruirPixel(even[3], odd[3]);
+            out16[row    * cols + (col    )] = p00;  // (0,0)
+            out16[(row+1)* cols + (col    )] = p10;  // (1,0)
+            out16[row    * cols + (col + 1)] = p01;  // (0,1)
+            out16[(row+1)* cols + (col + 1)] = p11;  // (1,1)
+
         }
     } 
-    std::memcpy(output, pixeles.data(), pixeles.size() * sizeof(uint16_t));
-    std::cout << "Done\n";
+
+
+/*
+    // For each cycle...
+    for(int n = 0; n < cycles; n++){
+        
+        // CICLO 1: Píxeles pares
+        uint8_t* even = p;
+
+        // CICLO 2: Píxeles impares
+        uint8_t* odd = p + simPixels;
+        
+        for(int i = 0; i < simPixels; i++){
+            int k = perm[i]; // Ajustamos orden de llegada
+            uint16_t pix = reconstruirPixel(even[k], odd[k]);
+            output[n * simPixels + i] = static_cast<uchar>(pix >> 8); // (p >> 8)
+        }
+        p+= 2 * simPixels; // Siguiente ciclo (factor 2 : par/impar)
+    }
+*/
 }
 
 // VideoTap Standard (sin DDR)
@@ -193,9 +222,7 @@ void applyTap(uchar* input, uchar* output, int rows, int cols, const string& tap
         }
         ofile1.close();
     }
-    // 2X - 2Y
 
-    // 1X-2Y
     if(Ry != 1 || Ty != 1){
         if(Ry != 1){
             size_t srcIndex = 0;
@@ -271,8 +298,8 @@ cv::Mat normalizeImage(const cv::Mat& img) {
     return out;
 }
 
-
-void processFrame(const cv::Mat& img, uchar* outputArray, int rows, int cols, const std::string& tapType, bool isDDR) {
+/*
+void processFrame(const cv::Mat& img, uint16_t* outputArray, int rows, int cols, const std::string& tapType, bool isDDR) {
     uchar* inputArray = img.data;
     const size_t N = size_t(rows) * cols;
     // buffer intermedio
@@ -280,14 +307,14 @@ void processFrame(const cv::Mat& img, uchar* outputArray, int rows, int cols, co
     memset(tmp.get(), 0, N);
 
     if(isDDR){
-        applyDDR(inputArray, tmp.get(), rows, cols, tapType);
+        applyDDR(inputArray, outputArray, rows, cols, tapType);
     } else {
-        std::memcpy(tmp.get(), inputArray, N);
+        applyTap(inputArray, outputArray, rows, cols, tapType);
     }
 
-    applyTap(tmp.get(), outputArray, rows, cols, tapType);
+    
 }
-
+*/
 void saveAndShow(cv::Mat& input, cv::Mat& output, const std::string& tapType){
     cv::imshow("Imagen Original", input);
     cv::imshow("Imagen Reconstruida", output);
@@ -299,6 +326,7 @@ void saveAndShow(cv::Mat& input, cv::Mat& output, const std::string& tapType){
 int main() {
 
     cv::Mat img, img8, img_norm16;
+    // DDR Videotap
     
     std::string askDDR; 
     std::cout << "Is DDR? (0/1): "; std::getline(std::cin, askDDR);
@@ -318,7 +346,6 @@ int main() {
         }
         path = "C:/CODE/VideoTaps/src/input/0_DDR_" + tapType + ".raw";
         std::cout << "Rows: " << rows << "\nCols: " << cols << "\nPath: " << path << std::endl;
-        size_t frameSize = rows * cols * 2;
 
         const size_t bytes = size_t(rows) * cols * 2;   // 2*N (pares+impares)
         img8.create(1, int(bytes), CV_8UC1);  
@@ -326,8 +353,30 @@ int main() {
         std::ifstream f(path, std::ios::binary);
         f.read(reinterpret_cast<char*>(img8.data), std::streamsize(bytes));
         if (!f) { std::cerr << "Read failed\n"; return 1; }
+        std::vector<uint16_t> out16(size_t(rows) * cols);
+        applyDDR(img8.ptr<uint8_t>(), out16.data(), rows, cols, tapType);
+
+        // ver como 16-bit y también en 8-bit
+        cv::Mat recon16(rows, cols, CV_16UC1, out16.data());
+
+        // Normaliza (o simplemente baja 8 bits)
+        double minV, maxV;
+        cv::minMaxLoc(recon16, &minV, &maxV);
+        cv::Mat recon8;
+        if (maxV > minV) {
+            recon16.convertTo(recon8, CV_8UC1, 255.0 / (maxV - minV), -minV * (255.0 / (maxV - minV)));
+        } else {
+            recon16.convertTo(recon8, CV_8UC1, 1.0/256.0);
+        }
+
+        // Mostrar solo la reconstruida (la “original” de DDR no es imagen 2D)
+        cv::imshow("Imagen Reconstruida (8-bit)", recon8);
+        cv::waitKey(0);
+            
         
     } else {
+        return 0;
+        /*
         rows = 480, cols = 640; // .bin
         path = "C:/CODE/VideoTaps/src/input/" + tapType + ".bin";
         std::cout << "Rows: " << rows << "\nCols: " << cols << "\nPath: " << path << std::endl;
@@ -336,17 +385,15 @@ int main() {
         // Normalizamos
         img_norm16 = normalizeImage(img); // CV_16UC1 -> CV_8UC1
         img_norm16.convertTo(img8, CV_8UC1, 1.0/256.0);
+        std::unique_ptr<uchar[]> out(new uchar[rows*cols]);
+        processFrame(img8, out.get(), rows, cols, tapType, isDDR);
+
+        cv::Mat reconstructed(rows, cols, CV_8UC1, out.get());
+        saveAndShow(img8, reconstructed, tapType);
+    */
 
     }
 
-    std::unique_ptr<uchar[]> out(new uchar[rows*cols]);
-    processFrame(img8, out.get(), rows, cols, tapType, isDDR);
 
-    cv::Mat reconstructed(rows, cols, CV_8UC1, out.get());
-    saveAndShow(img8, reconstructed, tapType);
-    // TODO
-    // 1. Tratar con CV_16UC1
-    // 2. Eliminar buffers intermedios
-    // 3. 
     return 0;
 }
