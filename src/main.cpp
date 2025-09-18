@@ -1,5 +1,7 @@
 #include <iostream>
 #include <vector>
+#include <algorithm>
+#include <chrono>
 #include <string>
 #include <tuple>
 #include <opencv2/opencv.hpp>
@@ -196,7 +198,8 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
     std::memcpy(bufferY.get(), input,  size_t(rows)*cols*sizeof(T));
     std::memcpy(buffer .get(), input,  size_t(rows)*cols*sizeof(T));
     
-    std::ofstream ofile1("step1.txt");
+    std::string filename = tapType + ".txt";
+    std::ofstream ofile1(filename);
     std::ofstream ofile2("step2.txt");
 
     if(Rx != 1 || Tx != 1 || Lx != '\0'){
@@ -213,6 +216,7 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
                                         bufferX[dstIndex] = input[srcIndex];
                                     } else {
                                         int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * (j + 1) - t));
+                                        ofile1 << srcIndex << " " << dstIndex << std::endl;
                                         bufferX[dstIndex] = input[srcIndex];                                
                                     }
                                 } else {
@@ -357,8 +361,15 @@ int main() {
         if (!f) { std::cerr << "Read failed\n"; return 1; }
 
         std::vector<uint16_t> out16(N);
-        processFrame(rawBytes, out16.data(), rows, cols, tapType, isDDR);
+        
+        using clock = std::chrono::steady_clock;
+        auto t0 = clock::now();
 
+        processFrame(rawBytes, out16.data(), rows, cols, tapType, isDDR);
+        auto t1 = clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+        std::cout << "processFrame DDR time: " << ms << " ms\n";
+        
         cv::Mat recon16(rows, cols, CV_16UC1, out16.data());
 
         // Normaliza
@@ -383,7 +394,14 @@ int main() {
         openBinaryFile("C:/CODE/VideoTap_Refactor/src/input/" + tapType + ".bin", img16, rows, cols);
         
         std::vector<uint16_t> out16(size_t(rows)*cols);
+
+        using clock = std::chrono::steady_clock;
+        auto t0 = clock::now();
+        
         processFrame(img16, out16.data(), rows, cols, tapType, isDDR);
+        auto t1 = clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+        std::cout << "processFrame time: " << ms << " ms\n";
 
         cv::Mat recon16(rows, cols, CV_16UC1, out16.data());
         cv::Mat recon16norm = normalizeImage(recon16); // Output normalizado
