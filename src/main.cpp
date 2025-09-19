@@ -77,7 +77,6 @@ void openBinaryFile(const std::string& filename, cv::Mat& img, int rows, int col
     const size_t need = size_t(rows)*cols*sizeof(uint16_t);
     if (size_t(file.tellg()) < need) throw std::runtime_error("Archivo mas pequeño que un frame");
     file.seekg(0);
-
     img.create(rows, cols, CV_16UC1);
     file.read(reinterpret_cast<char*>(img.data), need);
     if (size_t(file.gcount()) != need) throw std::runtime_error("Lectura incompleta");
@@ -183,12 +182,12 @@ void applyDDR(const uint8_t* input, uint16_t* out16, int rows, int cols, const s
 template<typename T>
 void applyTap(const T* input, T* output, int rows, int cols, const string& tapType) {
     auto [Rx, Tx, Lx, Ry, Ty, Ly] = readTap(tapType);
-
+    
     const int regionWidth = cols / Rx;
     const int tapsX = regionWidth / Tx; 
     const int regionHeight = rows / Ry;
     const int tapsY = regionHeight / Ty;
-    
+
     // buffers en T
     std::unique_ptr<T[]> bufferX(new T[rows * cols]);
     std::unique_ptr<T[]> bufferY(new T[rows * cols]);
@@ -197,67 +196,84 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
     std::memcpy(bufferX.get(), input,  size_t(rows)*cols*sizeof(T));
     std::memcpy(bufferY.get(), input,  size_t(rows)*cols*sizeof(T));
     std::memcpy(buffer .get(), input,  size_t(rows)*cols*sizeof(T));
-    
-    std::string filename = tapType + ".txt";
-    std::ofstream ofile1(filename);
-    std::ofstream ofile2("step2.txt");
 
-    if(Rx != 1 || Tx != 1 || Lx != '\0'){
-        if(Lx != '\0'){
-            for(int i = 0; i < regionHeight; i++){
-                for(int r = 0; r < Rx; r++){
-                    for(int j = 0; j < tapsX; j++){
-                        for(int t = 0; t < Tx; t++){
-                            int srcIndex = (i * cols) + (r * regionWidth + j * Tx + t);
-                            if(Lx == 'E'){
-                                if(r >= Rx/2){
-                                    if(Rx == 2){
-                                        int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * j + t + 1));    
-                                        bufferX[dstIndex] = input[srcIndex];
-                                    } else {
-                                        int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * (j + 1) - t));
-                                        ofile1 << srcIndex << " " << dstIndex << std::endl;
-                                        bufferX[dstIndex] = input[srcIndex];                                
-                                    }
-                                } else {
-                                    int dstIndex = (i * cols) + r * regionWidth + j * Tx + t;
-                                    bufferX[dstIndex] = input[srcIndex];
-                                }
-                            } else if (Lx == 'M'){
-                                if(r >= Rx/2){
-                                    int dstIndex = (i * cols) + r * regionWidth + j * Tx + t;
-                                    bufferX[dstIndex] = input[srcIndex];
+    if(Lx != '\0'){
+        for(int i = 0; i < regionHeight; i++){
+            for(int r = 0; r < Rx; r++){
+                for(int j = 0; j < tapsX; j++){
+                    for(int t = 0; t < Tx; t++){
+                        int srcIndex = (i * cols) + (r * regionWidth + j * Tx + t);
+                        if(Lx == 'E'){
+                            if(r >= Rx/2){
+                                if(Rx == 2){
+                                    int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * j + t + 1));    
+                                    bufferX[srcIndex] = input[dstIndex];
                                 } else {
                                     int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * (j + 1) - t));
-                                    bufferX[dstIndex] = input[srcIndex];
+                                    bufferX[srcIndex] = input[dstIndex];
                                 }
-                            } else if (Lx == 'R'){
+                            } else {
+                                int dstIndex = (i * cols) + r * regionWidth + j * Tx + t;
+                                bufferX[srcIndex] = input[dstIndex];
+                            }
+                        } else if (Lx == 'M'){
+                            if(r >= Rx/2){
+                                int dstIndex = (i * cols) + r * regionWidth + j * Tx + t;
+                                bufferX[srcIndex] = input[dstIndex];
+                            } else {
                                 int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * (j + 1) - t));
-                                bufferX[dstIndex] = input[srcIndex];
+                                bufferX[srcIndex] = input[dstIndex];
+                            }
+                        } else if (Lx == 'R'){
+                            int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * (j + 1) - t));
+                            bufferX[srcIndex] = input[dstIndex];
 
+                        }
+                    }
+                }
+            }
+        }
+        // Lx = '\0';
+    }
+
+    for (int i = 0; i < regionHeight; i++){
+        for (int r = 0; r < Rx; r++){
+            for (int j = 0; j < tapsX; j++){
+                for (int t = 0; t < Tx; t++){
+                    int srcIndex = (i * cols) + (r * regionWidth + j * Tx + t);
+                    int dstIndex = (i * cols) + (Tx * (j * Rx + r) + t);
+                    buffer[srcIndex] = bufferX[dstIndex];
+                }
+            }
+        } 
+    }
+/*    
+    if(Ly != '\0'){
+        for(int j = 0; j < cols; j++){
+            for(int ry = 0; ry < Ry; ry++){
+                for(int i = 0; i < tapsY; i++){
+                    for(int ty = 0; ty < Ty; ty++){
+                        int srcIndex = (ry * regionHeight + i * Ty + ty) * cols + j;
+                        if(Ly == 'E'){
+                            if(ry >= Ry/2){
+                                if(Ry == 2){
+                                    int dstIndex = (regionHeight * (ry + 1) - (Ty * i + ty + 1))* cols + j;    
+                                    bufferY[dstIndex] = input[srcIndex];
+                                }
+                            } else {
+                                int dstIndex = (ry * regionHeight + i * Ty + ty) * cols + j;
+                                bufferY[dstIndex] = input[srcIndex];
+                                ofile << srcIndex << " " << dstIndex << std::endl;
                             }
                         }
                     }
                 }
             }
-            // Lx = '\0';
         }
-    
-        for (int i = 0; i < regionHeight; i++){
-            for (int r = 0; r < Rx; r++){
-                for (int j = 0; j < tapsX; j++){
-                    for (int t = 0; t < Tx; t++){
-                        int srcIndex = (i * cols) + (r * regionWidth + j * Tx + t);
-                        int dstIndex = (i * cols) + (Tx * (j * Rx + r) + t);
-                        buffer[dstIndex] = bufferX[srcIndex];
-                        ofile1 << srcIndex << " " << dstIndex << "\n";
-                    }
-                }
-            } 
-        }
-        ofile1.close();
+        std::memcpy(output, bufferY.get(), size_t(rows) * cols * sizeof(T));
+        // Lx = '\0';
     }
-
+*/
     if(Ry != 1 || Ty != 1){
         if(Ry != 1){
             size_t srcIndex = 0;
@@ -265,7 +281,7 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
                 for(int j = 0; j < cols; j++){
                     for(int ry = 0; ry < Ry; ry++){
                         int dstIndex = (i + ry) * cols + j; // TODO: parecido a 2X-1Y2, unificar
-                        bufferY[srcIndex++] = buffer[dstIndex];
+                        bufferY[dstIndex] = buffer[srcIndex++];
                     }
                 }
             }
@@ -277,8 +293,7 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
                 for(int j = 0; j < cols; j++){
                     int srcIndex = (i * cols) + j;
                     int dstIndex = ((i - (i % 2)) * cols) + (2 * j + (i % 2));
-                    bufferY[dstIndex] = buffer[srcIndex];
-                    ofile2 << i << " " << j << " " << srcIndex << " || " << dstIndex << "\n";
+                    bufferY[srcIndex] = buffer[dstIndex];
                 }
             }
             std::memcpy(output, bufferY.get(), size_t(rows) * cols * sizeof(T));
@@ -286,9 +301,6 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
     } else { 
         std::memcpy(output, buffer.get(), size_t(rows)*cols*sizeof(T));  
     } 
-        
-    ofile2.close();
-    ofile1.close();
 }
 
 cv::Mat normalizeImage(const cv::Mat& img) {
@@ -325,8 +337,9 @@ void saveAndShow(cv::Mat& input, cv::Mat& output, const std::string& tapType){
     cv::imshow("Imagen Original", input);
     cv::imshow("Imagen Reconstruida", output);
     cv::waitKey(0);
-    //cv::imwrite((tapType + "_Original.png"), input);
-    //cv::imwrite((tapType + "_Reconstruida.png"), output);
+    cv::imwrite(("Imagen_Original.png"), input);
+    cv::imwrite((tapType + ".png"), output);
+
 }
 
 int main() {
@@ -337,6 +350,7 @@ int main() {
     std::string askDDR; 
     std::cout << "Is DDR? (0/1): "; std::getline(std::cin, askDDR);
     bool isDDR = (askDDR == "1");
+    
 
     std::string tapType; 
     std::cout << "Introduce Tap Geometry: "; std::getline(std::cin, tapType);
@@ -387,11 +401,9 @@ int main() {
         
     } else {        
         rows = 480, cols = 640; // .bin
-        path = "C:/CODE/VideoTaps/src/input/" + tapType + ".bin";
-        std::cout << "Rows: " << rows << "\nCols: " << cols << "\nPath: " << path << std::endl;
         // Abrimos
         cv::Mat img16;
-        openBinaryFile("C:/CODE/VideoTap_Refactor/src/input/" + tapType + ".bin", img16, rows, cols);
+        openBinaryFile("C:/CODE/VideoTaps/src/input/clean.bin", img16, rows, cols);
         
         std::vector<uint16_t> out16(size_t(rows)*cols);
 
