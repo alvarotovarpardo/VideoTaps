@@ -188,119 +188,96 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
     const int regionHeight = rows / Ry;
     const int tapsY = regionHeight / Ty;
 
+    auto invX = [&](int r)->bool{
+        if(Lx == '\0') return false;
+        bool right = (r >= Rx/2), left = !right;
+        if(Lx=='R') return true;
+        if(Lx=='E') return right;
+        if(Lx=='M') return left;
+        return false;
+    };
+    auto invY = [&](int ry)->bool{
+        if (Ly == '\0') return false;
+        bool bottom = (ry >= Ry/2), top = !bottom;
+        if (Ly=='R') return true;
+        if (Ly=='E') return bottom;
+        if (Ly=='M') return top;
+        return false;
+    };
+
+
     // buffers en T
-    std::unique_ptr<T[]> bufferX(new T[rows * cols]);
-    std::unique_ptr<T[]> bufferY(new T[rows * cols]);
-    std::unique_ptr<T[]> buffer (new T[rows * cols]);
+    std::unique_ptr<T[]> tmp(new T[size_t(rows) * cols]);
+    T* bufferX = tmp.get();
 
-    std::memcpy(bufferX.get(), input,  size_t(rows)*cols*sizeof(T));
-    std::memcpy(bufferY.get(), input,  size_t(rows)*cols*sizeof(T));
-    std::memcpy(buffer .get(), input,  size_t(rows)*cols*sizeof(T));
+    for(int i = 0; i < rows; i++){
+        const T* srcRow = input + size_t(i) * cols;
+        T* dstRow = bufferX + size_t(i) * cols;
 
-    if(Lx != '\0'){
-        for(int i = 0; i < regionHeight; i++){
-            for(int r = 0; r < Rx; r++){
-                for(int j = 0; j < tapsX; j++){
-                    for(int t = 0; t < Tx; t++){
-                        int srcIndex = (i * cols) + (r * regionWidth + j * Tx + t);
-                        if(Lx == 'E'){
-                            if(r >= Rx/2){
-                                if(Rx == 2){
-                                    int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * j + t + 1));    
-                                    bufferX[dstIndex] = input[srcIndex];
-                                } else {
-                                    int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * (j + 1) - t));
-                                    bufferX[dstIndex] = input[srcIndex];
-                                }
-                            } else {
-                                int dstIndex = (i * cols) + r * regionWidth + j * Tx + t;
-                                bufferX[dstIndex] = input[srcIndex];
-                            }
-                        } else if (Lx == 'M'){
-                            if(r >= Rx/2){
-                                int dstIndex = (i * cols) + r * regionWidth + j * Tx + t;
-                                bufferX[dstIndex] = input[srcIndex];
-                            } else {
-                                int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * (j + 1) - t));
-                                bufferX[dstIndex] = input[srcIndex];
-                            }
-                        } else if (Lx == 'R'){
-                            int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * (j + 1) - t));
-                            bufferX[dstIndex] = input[srcIndex];
+        for(int r = 0; r < Rx; r++){
+            const bool flip = invX(r);
+            const bool needReverse = flip && (Lx == 'E' || Lx == 'R'); // en 'M' NO se invierte bloque
+            const T* srcRegion = srcRow + r * regionWidth;
 
-                        }
-                    }
-                }
-            }
-        }
-        // Lx = '\0';
-    }
-
-    for (int i = 0; i < regionHeight; i++){
-        for (int r = 0; r < Rx; r++){
             for (int j = 0; j < tapsX; j++){
-                for (int t = 0; t < Tx; t++){
-                    int srcIndex = (i * cols) + (r * regionWidth + j * Tx + t);
-                    int dstIndex = (i * cols) + (Tx * (j * Rx + r) + t);
-                    buffer[dstIndex] = bufferX[srcIndex];
-                }
-            }
-        } 
-    }
-/*    
-    if(Ly != '\0'){
-        for(int j = 0; j < cols; j++){
-            for(int ry = 0; ry < Ry; ry++){
-                for(int i = 0; i < tapsY; i++){
-                    for(int ty = 0; ty < Ty; ty++){
-                        int srcIndex = (ry * regionHeight + i * Ty + ty) * cols + j;
-                        if(Ly == 'E'){
-                            if(ry >= Ry/2){
-                                if(Ry == 2){
-                                    int dstIndex = (regionHeight * (ry + 1) - (Ty * i + ty + 1))* cols + j;    
-                                    bufferY[dstIndex] = input[srcIndex];
-                                }
-                            } else {
-                                int dstIndex = (ry * regionHeight + i * Ty + ty) * cols + j;
-                                bufferY[dstIndex] = input[srcIndex];
-                                ofile << srcIndex << " " << dstIndex << std::endl;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        std::memcpy(output, bufferY.get(), size_t(rows) * cols * sizeof(T));
-        // Lx = '\0';
-    }
-*/
-    if(Ry != 1 || Ty != 1){
-        if(Ry != 1){
-            size_t srcIndex = 0;
-            for(int i = 0; i < rows; i+=2){ // Ry = 2 => mitad de filas
-                for(int j = 0; j < cols; j++){
-                    for(int ry = 0; ry < Ry; ry++){
-                        int dstIndex = (i + ry) * cols + j; // TODO: parecido a 2X-1Y2, unificar
-                        bufferY[srcIndex] = buffer[dstIndex++];
-                    }
-                }
-            }
-            std::memcpy(output, bufferY.get(), size_t(rows) * cols * sizeof(T));
-        }
+                const int srcJ = flip ? (regionWidth - (j+1)*Tx) : (j*Tx);
+                const T* srcBlock = srcRegion + srcJ;
 
-        if(Ty != 1){ 
-            for (int i = 0; i < rows; i++){
-                for(int j = 0; j < cols; j++){
-                    int srcIndex = (i * cols) + j;
-                    int dstIndex = ((i - (i % 2)) * cols) + (2 * j + (i % 2));
-                    bufferY[dstIndex] = buffer[srcIndex];
+                T* dstBlock = dstRow + Tx * (j*Rx + r);
+                if (!needReverse) {
+                    std::memcpy(dstBlock, srcBlock, size_t(Tx) * sizeof(T));
+                } else {
+                    for (int tx = 0; tx < Tx; ++tx) {
+                        dstBlock[tx] = srcBlock[Tx - 1 - tx];
+                    }
                 }
             }
-            std::memcpy(output, bufferY.get(), size_t(rows) * cols * sizeof(T));
         }
-    } else { 
-        std::memcpy(output, buffer.get(), size_t(rows)*cols*sizeof(T));  
-    } 
+    }
+
+
+    if (Ry==1 && Ty==1 && Ly=='\0') {
+        std::memcpy(output, bufferX, size_t(rows)*cols*sizeof(T));
+        return;
+    }
+
+    for (int ry = 0; ry < Ry; ++ry) {
+        const bool flip = invY(ry);
+        const bool reverse_inner = flip && (Ly=='E' || Ly=='R'); // en 'M' no
+
+        for (int j = 0; j < tapsY; ++j) {
+            // OJO: regionHeight (no regionWidth)
+            const int srcI = flip ? (regionHeight - (j+1)*Ty) : (j*Ty);
+            const int dstI = Ty * (j*Ry + ry);
+
+            if (!reverse_inner) {
+                for (int t = 0; t < Ty; ++t) {
+                    const int srcRow = ry*regionHeight + (srcI + t);
+                    const int dstRow = dstI + t;
+                    const T* srcPtr = bufferX + size_t(srcRow) * cols;
+                    T*       dstPtr = output + size_t(dstRow) * cols;
+                    std::memcpy(dstPtr, srcPtr, size_t(cols) * sizeof(T));
+                }
+            } else {
+                // invertir orden dentro del bloque de Ty filas
+                for (int t = 0; t < Ty; ++t) {
+                    const int srcRow = ry*regionHeight + (srcI + (Ty-1 - t));
+                    const int dstRow = dstI + t;
+                    const T* srcPtr = bufferX + size_t(srcRow) * cols;
+                    T*       dstPtr = output + size_t(dstRow) * cols;
+                    std::memcpy(dstPtr, srcPtr, size_t(cols) * sizeof(T));
+                }
+            }
+        }
+    }
+    // --- Apunte para mixtos tipo 2X-1Y2 ---
+    // Si verificas que X debe invertirse según la "banda Ty" (serpentina),
+    // se puede ajustar el paso-X sustituyendo `flip` por:
+    //
+    //   bool bandOdd = (((i % regionHeight) / Ty) % 2) != 0;
+    //   bool flip = invX(r) ^ (serpentina ? bandOdd : false);
+    //
+    // donde `serpentina` lo activamos sólo para taps mixtos que lo requieran.    
 }
 
 cv::Mat normalizeImage(const cv::Mat& img) {
@@ -347,10 +324,11 @@ int main() {
     cv::Mat img, img8, img_norm16;
     // DDR Videotap
     
-    std::string askDDR; 
+    /*std::string askDDR; 
     std::cout << "Is DDR? (0/1): "; std::getline(std::cin, askDDR);
     bool isDDR = (askDDR == "1");
-    
+    */
+    bool isDDR = false;
 
     std::string tapType; 
     std::cout << "Introduce Tap Geometry: "; std::getline(std::cin, tapType);
