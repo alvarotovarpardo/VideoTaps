@@ -207,26 +207,26 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
                             if(r >= Rx/2){
                                 if(Rx == 2){
                                     int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * j + t + 1));    
-                                    bufferX[srcIndex] = input[dstIndex];
+                                    bufferX[dstIndex] = input[srcIndex];
                                 } else {
                                     int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * (j + 1) - t));
-                                    bufferX[srcIndex] = input[dstIndex];
+                                    bufferX[dstIndex] = input[srcIndex];
                                 }
                             } else {
                                 int dstIndex = (i * cols) + r * regionWidth + j * Tx + t;
-                                bufferX[srcIndex] = input[dstIndex];
+                                bufferX[dstIndex] = input[srcIndex];
                             }
                         } else if (Lx == 'M'){
                             if(r >= Rx/2){
                                 int dstIndex = (i * cols) + r * regionWidth + j * Tx + t;
-                                bufferX[srcIndex] = input[dstIndex];
+                                bufferX[dstIndex] = input[srcIndex];
                             } else {
                                 int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * (j + 1) - t));
-                                bufferX[srcIndex] = input[dstIndex];
+                                bufferX[dstIndex] = input[srcIndex];
                             }
                         } else if (Lx == 'R'){
                             int dstIndex = (i * cols) + (regionWidth * (r + 1) - (Tx * (j + 1) - t));
-                            bufferX[srcIndex] = input[dstIndex];
+                            bufferX[dstIndex] = input[srcIndex];
 
                         }
                     }
@@ -242,7 +242,7 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
                 for (int t = 0; t < Tx; t++){
                     int srcIndex = (i * cols) + (r * regionWidth + j * Tx + t);
                     int dstIndex = (i * cols) + (Tx * (j * Rx + r) + t);
-                    buffer[srcIndex] = bufferX[dstIndex];
+                    buffer[dstIndex] = bufferX[srcIndex];
                 }
             }
         } 
@@ -281,7 +281,7 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
                 for(int j = 0; j < cols; j++){
                     for(int ry = 0; ry < Ry; ry++){
                         int dstIndex = (i + ry) * cols + j; // TODO: parecido a 2X-1Y2, unificar
-                        bufferY[dstIndex] = buffer[srcIndex++];
+                        bufferY[srcIndex] = buffer[dstIndex++];
                     }
                 }
             }
@@ -293,7 +293,7 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
                 for(int j = 0; j < cols; j++){
                     int srcIndex = (i * cols) + j;
                     int dstIndex = ((i - (i % 2)) * cols) + (2 * j + (i % 2));
-                    bufferY[srcIndex] = buffer[dstIndex];
+                    bufferY[dstIndex] = buffer[srcIndex];
                 }
             }
             std::memcpy(output, bufferY.get(), size_t(rows) * cols * sizeof(T));
@@ -403,7 +403,7 @@ int main() {
         rows = 480, cols = 640; // .bin
         // Abrimos
         cv::Mat img16;
-        openBinaryFile("C:/CODE/VideoTaps/src/input/clean.bin", img16, rows, cols);
+        openBinaryFile("C:/CODE/VideoTaps/src/input/" + tapType + ".bin", img16, rows, cols);
         
         std::vector<uint16_t> out16(size_t(rows)*cols);
 
