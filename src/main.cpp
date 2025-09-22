@@ -183,6 +183,8 @@ template<typename T>
 void applyTap(const T* input, T* output, int rows, int cols, const string& tapType) {
     auto [Rx, Tx, Lx, Ry, Ty, Ly] = readTap(tapType);
     
+    std::ofstream ofile("refactor.txt");
+
     const int regionWidth = cols / Rx;
     const int tapsX = regionWidth / Tx; 
     const int regionHeight = rows / Ry;
@@ -209,32 +211,34 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
     // buffers en T
     std::unique_ptr<T[]> tmp(new T[size_t(rows) * cols]);
     T* bufferX = tmp.get();
+    if(Rx != 1 || Tx != 1 || Lx != '\0'){
+        for(int i = 0; i < rows; i++){
+            const T* srcRow = input + size_t(i) * cols;
+            T* dstRow = bufferX + size_t(i) * cols;
 
-    for(int i = 0; i < rows; i++){
-        const T* srcRow = input + size_t(i) * cols;
-        T* dstRow = bufferX + size_t(i) * cols;
+            for(int r = 0; r < Rx; r++){
+                const bool flip = invX(r);
+                const bool needReverse = flip && (Lx == 'E' || Lx == 'R'); // en 'M' NO se invierte bloque
+                const T* srcRegion = srcRow + r * regionWidth;
 
-        for(int r = 0; r < Rx; r++){
-            const bool flip = invX(r);
-            const bool needReverse = flip && (Lx == 'E' || Lx == 'R'); // en 'M' NO se invierte bloque
-            const T* srcRegion = srcRow + r * regionWidth;
+                for (int j = 0; j < tapsX; j++){
+                    const int srcJ = flip ? (regionWidth - (j+1)*Tx) : (j*Tx);
+                    const T* srcBlock = srcRegion + srcJ;
 
-            for (int j = 0; j < tapsX; j++){
-                const int srcJ = flip ? (regionWidth - (j+1)*Tx) : (j*Tx);
-                const T* srcBlock = srcRegion + srcJ;
-
-                T* dstBlock = dstRow + Tx * (j*Rx + r);
-                if (!needReverse) {
-                    std::memcpy(dstBlock, srcBlock, size_t(Tx) * sizeof(T));
-                } else {
-                    for (int tx = 0; tx < Tx; ++tx) {
-                        dstBlock[tx] = srcBlock[Tx - 1 - tx];
+                    T* dstBlock = dstRow + Tx * (j*Rx + r);
+                    if (!needReverse) {
+                        std::memcpy(dstBlock, srcBlock, size_t(Tx) * sizeof(T));
+                    } else {
+                        for (int tx = 0; tx < Tx; ++tx) {
+                            dstBlock[tx] = srcBlock[Tx - 1 - tx];
+                        }
                     }
                 }
             }
         }
+    } else {
+        std::memcpy(bufferX, input, size_t(rows)*cols*sizeof(T));
     }
-
 
     if (Ry==1 && Ty==1 && Ly=='\0') {
         std::memcpy(output, bufferX, size_t(rows)*cols*sizeof(T));
@@ -243,41 +247,21 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
 
     for (int ry = 0; ry < Ry; ++ry) {
         const bool flip = invY(ry);
-        const bool reverse_inner = flip && (Ly=='E' || Ly=='R'); // en 'M' no
+        const bool needReverse = flip && (Ly=='E' || Ly=='R'); // como en X: E/R sí, M no
 
-        for (int j = 0; j < tapsY; ++j) {
-            // OJO: regionHeight (no regionWidth)
-            const int srcI = flip ? (regionHeight - (j+1)*Ty) : (j*Ty);
-            const int dstI = Ty * (j*Ry + ry);
+        for (int i = 0; i < regionHeight; ++i) {
+            const int lane   = i % Ty;
+            const int lane2  = needReverse ? (Ty-1 - lane) : lane;
 
-            if (!reverse_inner) {
-                for (int t = 0; t < Ty; ++t) {
-                    const int srcRow = ry*regionHeight + (srcI + t);
-                    const int dstRow = dstI + t;
-                    const T* srcPtr = bufferX + size_t(srcRow) * cols;
-                    T*       dstPtr = output + size_t(dstRow) * cols;
-                    std::memcpy(dstPtr, srcPtr, size_t(cols) * sizeof(T));
-                }
-            } else {
-                // invertir orden dentro del bloque de Ty filas
-                for (int t = 0; t < Ty; ++t) {
-                    const int srcRow = ry*regionHeight + (srcI + (Ty-1 - t));
-                    const int dstRow = dstI + t;
-                    const T* srcPtr = bufferX + size_t(srcRow) * cols;
-                    T*       dstPtr = output + size_t(dstRow) * cols;
-                    std::memcpy(dstPtr, srcPtr, size_t(cols) * sizeof(T));
-                }
+            const int srcRow = ry*regionHeight + i;
+            const int dstRow = ry*regionHeight + i - lane2;
+
+            for (int j = 0; j < cols; ++j) {
+                const int dstCol = Ty * j + lane2;
+                output[ size_t(dstRow)*cols + dstCol ] = bufferX[ size_t(srcRow)*cols + j ];
             }
         }
     }
-    // --- Apunte para mixtos tipo 2X-1Y2 ---
-    // Si verificas que X debe invertirse según la "banda Ty" (serpentina),
-    // se puede ajustar el paso-X sustituyendo `flip` por:
-    //
-    //   bool bandOdd = (((i % regionHeight) / Ty) % 2) != 0;
-    //   bool flip = invX(r) ^ (serpentina ? bandOdd : false);
-    //
-    // donde `serpentina` lo activamos sólo para taps mixtos que lo requieran.    
 }
 
 cv::Mat normalizeImage(const cv::Mat& img) {
