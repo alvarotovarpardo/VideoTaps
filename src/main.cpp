@@ -206,18 +206,22 @@ void applyXtap(const T* input, T* output, int rows, int cols, int Rx, int Tx, ch
             for (int j = 0; j < tapsX; j++){
                 const int srcJ = flip ? (regionWidth - (j+1)*Tx) : (j*Tx);
                 const T* srcBlock = srcRegion + srcJ;
-
                 T* dstBlock = dstRow + Tx * (j*Rx + r);
-                if (!needReverse) {
-                    std::memcpy(dstBlock, srcBlock, size_t(Tx) * sizeof(T));
-                } else {
-                    for (int tx = 0; tx < Tx; ++tx) {
-                        dstBlock[tx] = srcBlock[Tx - 1 - tx];
-                    }
+                
+
+                for(int tx = 0; tx < Tx; tx++){
+                    const int inb = needReverse ? (Tx - 1 - tx) : tx;
+                    const int srcCol = r * regionWidth + srcJ + inb;
+                    const int dstCol = Tx * (j * Rx + r) + tx;
+
+                    const size_t srcIdx = size_t(i) * cols + size_t(srcCol);
+                    const size_t dstIdx = size_t(i) * cols + size_t(dstCol);
+
+                    dstBlock[tx] = srcBlock[inb];
                 }
             }
         }
-    }   
+    }  
 }
 
 template<typename T>
@@ -258,46 +262,17 @@ template<typename T>
 void applyTap(const T* input, T* output, int rows, int cols, const string& tapType) {
     auto [Rx, Tx, Lx, Ry, Ty, Ly] = readTap(tapType);
 
-    // buffers en T
     std::unique_ptr<T[]> tmp(new T[size_t(rows) * cols]);
     T* bufferX = tmp.get();
-/*
-    if(Rx == 2 && Tx == 1 && Ty == 2){
-        for(int i = 0; i < tapsY; i++){
-            for(int ty = 0; ty < Ty; ty++){
-                for(int rx = 0; rx < Rx; rx++){
-                    for(int j = 0; j < regionWidth; j++){
-                        int srcIdx = (i * Ty + ty)*cols + (rx * regionWidth + j);
-                        int dstIdx = (i * Ty) * cols + Rx  * (Ty * j + rx) + ty;
-                        
-                        // ofile << "srcIdx = " << srcIdx << "\t&&\t\tdstIdx(" << i <<"," << ty << "," << rx << "," << j << ") = " 
-                        // << dstIdx << std::endl;
-                        // if(dstIdx > rows * cols) std::cout << "Limit reached: " << dstIdx << " VS " << rows*cols << std::endl;
-                        
-                        output[srcIdx] = input[dstIdx];
-                    }
-                }
 
-            }
-        }
-        return;
-    }
-*/
-
-
+    applyYtap(input, bufferX, rows, cols, Ry, Ty, Ly);
+    std::memcpy(output, bufferX, size_t(rows)*cols*sizeof(T));
 
     if(Rx != 1 || Tx != 1 || Lx != '\0'){
-        applyXtap(input, bufferX, rows, cols, Rx, Tx, Lx);
+        applyXtap(bufferX, output, rows, cols, Rx, Tx, Lx);
     } else {
-        std::memcpy(bufferX, input, size_t(rows)*cols*sizeof(T));
-    }
-
-    if (Ry==1 && Ty==1 && Ly=='\0') {
-        std::memcpy(output, bufferX, size_t(rows)*cols*sizeof(T));
         return;
     }
-
-    applyYtap(bufferX, output, rows, cols, Ry, Ty, Ly);
 }
 
 cv::Mat normalizeImage(const cv::Mat& img) {
