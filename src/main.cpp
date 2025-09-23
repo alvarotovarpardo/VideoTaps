@@ -230,6 +230,11 @@ template<typename T>
 void invertYtap(const T* input, T* output, int rows, int cols, int Ry, char Ly) {
     const int regionHeight = rows / Ry;
 
+    if (Ly == '\0') {
+        std::memcpy(output, input, size_t(rows)*cols*sizeof(T));
+        return;
+    }
+
     auto invY = [&](int ry)->bool{
         if (Ly == '\0') return false;
         const bool bottom = (ry >= Ry/2), top = !bottom;
@@ -238,11 +243,6 @@ void invertYtap(const T* input, T* output, int rows, int cols, int Ry, char Ly) 
         if (Ly=='M') return top;
         return false;
     };
-
-    if (Ly == '\0') {
-        std::memcpy(output, input, size_t(rows)*cols*sizeof(T));
-        return;
-    }
 
     for (int ry = 0; ry < Ry; ++ry) {
         const bool flip = invY(ry);
@@ -262,23 +262,22 @@ template<typename T>
 void applyYtap(const T* input, T* output, int rows, int cols, int Ry, int Ty) {
     const int regionHeight = rows / Ry;
 
-    std::ofstream ofile1("y_tap.txt");
-    for (int ry = 0; ry < Ry; ++ry) {
-        for (int i = 0; i < regionHeight; ++i) {
-            const int lane   = i % Ty; 
+    for (int i = 0; i < regionHeight; ++i) {
+        for (int ry = 0; ry < Ry; ++ry) {
+            // const int lane   = i % Ty; 
             const int srcRow = ry*regionHeight + i;
-            const int dstRow = srcRow; 
+            const int dstRow = i * Ry; 
 
             const T* src = input  + size_t(srcRow)*cols;
                   T* dst = output + size_t(dstRow)*cols;
 
-            for (int k = 0, dstCol = lane; dstCol < cols; ++k, dstCol += Ty) {
-                const int srcCol = lane + k*Ty;
-                ofile1 << srcCol << " " << dstCol << std::endl;
+            for (int j = 0; j < cols; j++) {
+                const int srcCol = j;
+                const int dstCol = 2*j + ry;
                 dst[dstCol] = src[srcCol];
             }
         }
-    } ofile1.close();
+    } 
 }
 
 template<typename T>
