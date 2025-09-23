@@ -180,13 +180,10 @@ void applyDDR(const uint8_t* input, uint16_t* out16, int rows, int cols, const s
 
 // VideoTap Standard (sin DDR)
 template<typename T>
-void applyTap(const T* input, T* output, int rows, int cols, const string& tapType) {
-    auto [Rx, Tx, Lx, Ry, Ty, Ly] = readTap(tapType);
+void applyXtap(const T* input, T* output, int rows, int cols, int Rx, int Tx, char Lx){
 
     const int regionWidth = cols / Rx;
     const int tapsX = regionWidth / Tx; 
-    const int regionHeight = rows / Ry;
-    const int tapsY = regionHeight / Ty;
 
     auto invX = [&](int r)->bool{
         if(Lx == '\0') return false;
@@ -196,6 +193,39 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
         if(Lx=='M') return left;
         return false;
     };
+
+    for(int i = 0; i < rows; i++){
+        const T* srcRow = input + size_t(i) * cols;
+        T* dstRow = output + size_t(i) * cols;
+
+        for(int r = 0; r < Rx; r++){
+            const bool flip = invX(r);
+            const bool needReverse = flip && (Lx == 'E' || Lx == 'R'); // en 'M' NO se invierte bloque
+            const T* srcRegion = srcRow + r * regionWidth;
+
+            for (int j = 0; j < tapsX; j++){
+                const int srcJ = flip ? (regionWidth - (j+1)*Tx) : (j*Tx);
+                const T* srcBlock = srcRegion + srcJ;
+
+                T* dstBlock = dstRow + Tx * (j*Rx + r);
+                if (!needReverse) {
+                    std::memcpy(dstBlock, srcBlock, size_t(Tx) * sizeof(T));
+                } else {
+                    for (int tx = 0; tx < Tx; ++tx) {
+                        dstBlock[tx] = srcBlock[Tx - 1 - tx];
+                    }
+                }
+            }
+        }
+    }   
+}
+
+template<typename T>
+void applyYtap(const T* input, T* output, int rows, int cols, int Ry, int Ty, char Ly){
+
+    const int regionHeight = rows / Ry;
+    const int tapsY = regionHeight / Ty;
+    
     auto invY = [&](int ry)->bool{
         if (Ly == '\0') return false;
         bool bottom = (ry >= Ry/2), top = !bottom;
@@ -205,6 +235,28 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
         return false;
     };
 
+    for (int ry = 0; ry < Ry; ++ry) {
+        const bool flip = invY(ry);
+        const bool needReverse = flip && (Ly=='E' || Ly=='R'); // como en X: E/R sí, M no
+
+        for (int i = 0; i < regionHeight; ++i) {
+            const int lane   = (i % Ty);
+            const int lane2  = needReverse ? (Ty-1 - lane) : lane;
+
+            const int srcRow = ry*regionHeight + i;
+            const int dstRow = ry*regionHeight + i - lane2;
+
+            for (int j = 0; j < cols; ++j) {
+                const int dstCol = Ty * j + lane2;
+                output[size_t(dstRow)*cols + dstCol] = input[ size_t(srcRow)*cols + j ];
+            }
+        }
+    }   
+}
+
+template<typename T>
+void applyTap(const T* input, T* output, int rows, int cols, const string& tapType) {
+    auto [Rx, Tx, Lx, Ry, Ty, Ly] = readTap(tapType);
 
     // buffers en T
     std::unique_ptr<T[]> tmp(new T[size_t(rows) * cols]);
@@ -232,65 +284,20 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
     }
 */
 
-    for (int ry = 0; ry < Ry; ++ry) {
-        const bool flip = invY(ry);
-        const bool needReverse = flip && (Ly=='E' || Ly=='R'); // como en X: E/R sí, M no
 
-        for (int i = 0; i < regionHeight; ++i) {
-            const int lane   = (i % Ty);
-            const int lane2  = needReverse ? (Ty-1 - lane) : lane;
-
-            const int srcRow = ry*regionHeight + i;
-            const int dstRow = ry*regionHeight + i - lane2;
-
-            for (int j = 0; j < cols; ++j) {
-                const int dstCol = Ty * j + lane2;
-                bufferX[size_t(dstRow)*cols + dstCol] = input[ size_t(srcRow)*cols + j ];
-            }
-        }
-    }
-    std::memcpy(output, bufferX, size_t(rows)*cols*sizeof(T));
 
     if(Rx != 1 || Tx != 1 || Lx != '\0'){
-        for(int i = 0; i < rows; i++){
-            const T* srcRow = bufferX + size_t(i) * cols;
-            T* dstRow = output + size_t(i) * cols;
-
-            for(int r = 0; r < Rx; r++){
-                const bool flip = invX(r);
-                const bool needReverse = flip && (Lx == 'E' || Lx == 'R'); // en 'M' NO se invierte bloque
-                const T* srcRegion = srcRow + r * regionWidth;
-
-                for (int j = 0; j < tapsX; j++){
-                    const int srcJ = flip ? (regionWidth - (j+1)*Tx) : (j*Tx);
-                    const T* srcBlock = srcRegion + srcJ;
-                    T* dstBlock = dstRow + Tx * (j*Rx + r);
-                    
-
-                    for(int tx = 0; tx < Tx; tx++){
-                        const int inb = needReverse ? (Tx - 1 - tx) : tx;
-                        const int srcCol = r * regionWidth + srcJ + inb;
-                        const int dstCol = Tx * (j * Rx + r) + tx;
-
-                        const size_t srcIdx = size_t(i) + cols + size_t(srcCol);
-                        const size_t dstIdx = size_t(i) + cols + size_t(dstCol);
-
-                        dstBlock[tx] = srcBlock[inb];
-                    }
-                }
-            }
-        }
+        applyXtap(input, bufferX, rows, cols, Rx, Tx, Lx);
     } else {
-        std::memcpy(output, bufferX, size_t(rows)*cols*sizeof(T));
-        //std::memcpy(bufferX, input, size_t(rows)*cols*sizeof(T));
-        return;
+        std::memcpy(bufferX, input, size_t(rows)*cols*sizeof(T));
     }
 
     if (Ry==1 && Ty==1 && Ly=='\0') {
-        //std::memcpy(output, bufferX, size_t(rows)*cols*sizeof(T));
+        std::memcpy(output, bufferX, size_t(rows)*cols*sizeof(T));
         return;
     }
 
+    applyYtap(bufferX, output, rows, cols, Ry, Ty, Ly);
 }
 
 cv::Mat normalizeImage(const cv::Mat& img) {
@@ -394,7 +401,7 @@ int main() {
         rows = 480, cols = 640; // .bin
         // Abrimos
         cv::Mat img16;
-        openBinaryFile("C:/CODE/VideoTaps/src/input/" + tapType + "(1).bin", img16, rows, cols);
+        openBinaryFile("C:/CODE/VideoTaps/src/input/" + tapType + ".bin", img16, rows, cols);
         
         std::vector<uint16_t> out16(size_t(rows)*cols);
 
