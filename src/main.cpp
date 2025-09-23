@@ -182,8 +182,8 @@ void applyDDR(const uint8_t* input, uint16_t* out16, int rows, int cols, const s
 template<typename T>
 void applyXtap(const T* input, T* output, int rows, int cols, int Rx, int Tx, char Lx){
 
-    const int regionWidth = cols / Rx;
-    const int tapsX = regionWidth / Tx; 
+    int regionWidth = cols / Rx;
+    int tapsX = regionWidth / Tx; 
 
     auto invX = [&](int r)->bool{
         if(Lx == '\0') return false;
@@ -199,23 +199,25 @@ void applyXtap(const T* input, T* output, int rows, int cols, int Rx, int Tx, ch
         T* dstRow = output + size_t(i) * cols;
 
         for(int r = 0; r < Rx; r++){
-            const bool flip = invX(r);
-            const bool needReverse = flip && (Lx == 'E' || Lx == 'R'); // en 'M' NO se invierte bloque
+            bool flip = invX(r);
+            bool needReverse = flip && (Lx == 'E' || Lx == 'R'); // en 'M' NO se invierte bloque
+            
+            if (Lx == 'E' && Rx == 4 && Tx == 2) needReverse = false;   
             const T* srcRegion = srcRow + r * regionWidth;
 
             for (int j = 0; j < tapsX; j++){
-                const int srcJ = flip ? (regionWidth - (j+1)*Tx) : (j*Tx);
+                int srcJ = flip ? (regionWidth - (j+1)*Tx) : (j*Tx);
                 const T* srcBlock = srcRegion + srcJ;
                 T* dstBlock = dstRow + Tx * (j*Rx + r);
                 
 
                 for(int tx = 0; tx < Tx; tx++){
-                    const int inb = needReverse ? (Tx - 1 - tx) : tx;
-                    const int srcCol = r * regionWidth + srcJ + inb;
-                    const int dstCol = Tx * (j * Rx + r) + tx;
+                    int inb = needReverse ? (Tx - 1 - tx) : tx;
+                    int srcCol = r * regionWidth + srcJ + inb;
+                    int dstCol = Tx * (j * Rx + r) + tx;
 
-                    const size_t srcIdx = size_t(i) * cols + size_t(srcCol);
-                    const size_t dstIdx = size_t(i) * cols + size_t(dstCol);
+                    size_t srcIdx = size_t(i) * cols + size_t(srcCol);
+                    size_t dstIdx = size_t(i) * cols + size_t(dstCol);
 
                     dstBlock[tx] = srcBlock[inb];
                 }
@@ -309,8 +311,8 @@ void saveAndShow(cv::Mat& input, cv::Mat& output, const std::string& tapType){
     cv::imshow("Imagen Original", input);
     cv::imshow("Imagen Reconstruida", output);
     cv::waitKey(0);
-    cv::imwrite(("Imagen_Original.png"), input);
-    cv::imwrite((tapType + ".png"), output);
+    // cv::imwrite(("Imagen_Original.png"), input);
+    // cv::imwrite((tapType + ".png"), output);
 
 }
 
