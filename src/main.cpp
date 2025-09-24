@@ -180,46 +180,92 @@ void applyDDR(const uint8_t* input, uint16_t* out16, int rows, int cols, const s
 
 // VideoTap Standard (sin DDR)
 template<typename T>
-void applyXtap(const T* input, T* output, int rows, int cols, int Rx, int Tx, char Lx){
+void invertXtap(const T* input, T* output, int rows, int cols, int Rx, int Tx, int Lx){
+    const int regionWidth = cols / Rx;
+    const int tapsX = regionWidth / Tx;
 
-    int regionWidth = cols / Rx;
-    int tapsX = regionWidth / Tx; 
+    if (Lx == '\0') {
+        std::memcpy(output, input, size_t(rows)*cols*sizeof(T));
+        return;
+    }
 
     auto invX = [&](int r)->bool{
-        if(Lx == '\0') return false;
-        bool right = (r >= Rx/2), left = !right;
-        if(Lx=='R') return true;
-        if(Lx=='E') return right;
-        if(Lx=='M') return left;
+        if (Lx == '\0') return false;
+        const bool right = (r >= Rx/2), left = !right;
+        if (Lx == 'R') return true;
+        if (Lx == 'E') return right;
+        if (Lx == 'M') return left;
         return false;
+    };
+
+    // Gestiona el envío reverso de bloques dentro de un tap Tx
+    auto innerReverse = [&](int r)->bool{
+        if (!(Lx == 'E' || Lx == 'R')) return false;
+        bool needReverse = true;
+        if (Lx == 'E' && Rx == 4 && Tx == 2) needReverse = false;
+        return needReverse && invX(r);
     };
 
     for(int i = 0; i < rows; i++){
         const T* srcRow = input + size_t(i) * cols;
-        T* dstRow = output + size_t(i) * cols;
+              T* dstRow = output + size_t(i) * cols;
 
-        for(int r = 0; r < Rx; r++){
-            bool flip = invX(r);
-            bool needReverse = flip && (Lx == 'E' || Lx == 'R'); // en 'M' NO se invierte bloque
-            
-            if (Lx == 'E' && Rx == 4 && Tx == 2) needReverse = false;   
+        for(int rx = 0; rx < Rx; rx++){
+            const bool invert = invX(rx); // Invert region
+            const bool innvert = innerReverse(rx); // Invert pixel order
+
+            const T* srcRegion = srcRow + rx * regionWidth;
+                  T* dstRegion = dstRow + rx * regionWidth;
+
+            if(!invert){
+                std::memcpy(dstRegion, srcRegion, size_t(regionWidth)*sizeof(T));
+                continue;
+            }
+
+            if(innvert){
+                // Reinvertimos intra-bloque
+                for(int j = 0; j < regionWidth; j++){
+                    dstRegion[j] = srcRegion[regionWidth - j - 1];
+                }
+            } else {
+                // Reinvertimos el orden de bloques de tamaño Tx
+                for(int j = 0; j < tapsX; j++){
+                    const int srcJ = (tapsX - 1 - j) * Tx;
+                    std::memcpy(dstRegion + j*Tx, srcRegion + srcJ, size_t(Tx) * sizeof(T));
+                }
+            }
+        }
+    }
+}
+
+template<typename T>
+void applyXtap(const T* input, T* output, int rows, int cols, int Rx, int Tx, char Lx){
+
+    const int regionWidth = cols / Rx;
+    const int tapsX = regionWidth / Tx;
+
+    std::unique_ptr<T[]> tmp(new T[size_t(rows) * cols]);
+    T* buffer = tmp.get();
+    
+    if(Lx != '\0'){
+        invertXtap(input, buffer, rows, cols, Rx, Tx, Lx);
+    } else {
+        std::memcpy(buffer, input, size_t(rows)*cols*sizeof(T));
+    }
+
+    for(int i = 0; i < rows; i++){
+        const T* srcRow = buffer + size_t(i) * cols;
+              T* dstRow = output + size_t(i) * cols;
+
+        for(int r = 0; r < Rx; r++){            
             const T* srcRegion = srcRow + r * regionWidth;
 
             for (int j = 0; j < tapsX; j++){
-                int srcJ = flip ? (regionWidth - (j+1)*Tx) : (j*Tx);
-                const T* srcBlock = srcRegion + srcJ;
-                T* dstBlock = dstRow + Tx * (j*Rx + r);
+                const T* srcBlock = srcRegion + j * Tx;
+                      T* dstBlock = dstRow + Tx * (j*Rx + r);
                 
-
                 for(int tx = 0; tx < Tx; tx++){
-                    int inb = needReverse ? (Tx - 1 - tx) : tx;
-                    int srcCol = r * regionWidth + srcJ + inb;
-                    int dstCol = Tx * (j * Rx + r) + tx;
-
-                    size_t srcIdx = size_t(i) * cols + size_t(srcCol);
-                    size_t dstIdx = size_t(i) * cols + size_t(dstCol);
-
-                    dstBlock[tx] = srcBlock[inb];
+                    dstBlock[tx] = srcBlock[tx];
                 }
             }
         }
@@ -256,7 +302,6 @@ void invertYtap(const T* input, T* output, int rows, int cols, int Ry, char Ly) 
     }
 }
 
-
 template<typename T>
 void applyYtap(const T* input, T* output, int rows, int cols, int Ry, int Ty, char Ly) {
     const int regionHeight = rows / Ry;
@@ -289,7 +334,7 @@ void applyYtap(const T* input, T* output, int rows, int cols, int Ry, int Ty, ch
 }
 
 template<typename T>
-void applyRyTx(const T* input, T* output, int rows, int cols, int Ry, int Ty, int Rx, int Tx, char Ly) {
+void applyMixTap(const T* input, T* output, int rows, int cols, int Ry, int Ty, int Rx, int Tx, char Ly) {
     const int regionHeight = rows / Ry;
     
     std::unique_ptr<T[]> tmp(new T[size_t(rows) * cols]);
@@ -338,7 +383,7 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
     bool hasComplexTap = (Lx != '\0' || Ly != '\0') && hasXYtap;
 
     if(hasComplexTap){
-        applyRyTx(input, output, rows, cols, Ry, Ty, Rx, Tx, Ly);
+        applyMixTap(input, output, rows, cols, Ry, Ty, Rx, Tx, Ly);
         return;
     }
 
