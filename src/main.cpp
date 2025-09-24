@@ -269,11 +269,11 @@ void applyXtap(const T* input, T* output, int rows, int cols, int Rx, int Tx, ch
                 }
             }
         }
-    }  
+    }
 }
 
 template<typename T>
-void invertYtap(const T* input, T* output, int rows, int cols, int Ry, char Ly) {
+void invertYtap(const T* input, T* output, int rows, int cols, int Ry, int Ty, char Ly) {
     const int regionHeight = rows / Ry;
 
     if (Ly == '\0') {
@@ -289,6 +289,7 @@ void invertYtap(const T* input, T* output, int rows, int cols, int Ry, char Ly) 
         if (Ly=='M') return top;
         return false;
     };
+
     for (int ry = 0; ry < Ry; ++ry) {
         const bool flip = invY(ry);
         for (int i = 0; i < regionHeight; ++i) {
@@ -310,7 +311,7 @@ void applyYtap(const T* input, T* output, int rows, int cols, int Ry, int Ty, ch
     T* buffer = tmp.get();
     
     if(Ly != '\0'){
-        invertYtap(input, buffer, rows, cols, Ry, Ly);
+        invertYtap(input, buffer, rows, cols, Ry, Ty, Ly);
     } else {
         std::memcpy(buffer, input, size_t(rows)*cols*sizeof(T));
     }
@@ -334,14 +335,25 @@ void applyYtap(const T* input, T* output, int rows, int cols, int Ry, int Ty, ch
 }
 
 template<typename T>
-void applyMixTap(const T* input, T* output, int rows, int cols, int Ry, int Ty, int Rx, int Tx, char Ly) {
+void applyMixTap(const T* input, T* output, int rows, int cols, int Ry, int Ty, int Rx, int Tx, char Ly, char Lx) {
     const int regionHeight = rows / Ry;
     
+    const bool hasLy = (Ly != '\0');
+    const bool hasLx = (Lx != '\0');
+
     std::unique_ptr<T[]> tmp(new T[size_t(rows) * cols]);
     T* buffer = tmp.get();
-    
-    if(Ly != '\0'){
-        invertYtap(input, buffer, rows, cols, Ry, Ly);
+
+
+    if(hasLy && hasLx){
+        std::unique_ptr<T[]> tmp2(new T[size_t(rows) * cols]);
+        T* buffer2 = tmp2.get();
+        invertYtap(input, buffer2, rows, cols, Ry, Ty, Ly);
+        invertXtap(buffer2, buffer, rows, cols, Rx, Tx, Lx);
+    } else if (hasLy && !hasLx){
+        invertYtap(input, buffer, rows, cols, Ry, Ty, Ly);
+    } else if (hasLx && !hasLy) {
+        invertXtap(input, buffer, rows, cols, Rx, Tx, Lx);
     } else {
         std::memcpy(buffer, input, size_t(rows)*cols*sizeof(T));
     }
@@ -383,7 +395,7 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
     bool hasComplexTap = (Lx != '\0' || Ly != '\0') && hasXYtap;
 
     if(hasComplexTap){
-        applyMixTap(input, output, rows, cols, Ry, Ty, Rx, Tx, Ly);
+        applyMixTap(input, output, rows, cols, Ry, Ty, Rx, Tx, Ly, Lx);
         return;
     }
 
