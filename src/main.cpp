@@ -256,17 +256,58 @@ void invertYtap(const T* input, T* output, int rows, int cols, int Ry, char Ly) 
     }
 }
 
+
 template<typename T>
-void applyYtap(const T* input, T* output, int rows, int cols, int& Ry, int& Ty, int& Tx) {
+void applyYtap(const T* input, T* output, int rows, int cols, int Ry, int Ty, char Ly) {
     const int regionHeight = rows / Ry;
     
+    std::unique_ptr<T[]> tmp(new T[size_t(rows) * cols]);
+    T* buffer = tmp.get();
+    
+    if(Ly != '\0'){
+        invertYtap(input, buffer, rows, cols, Ry, Ly);
+    } else {
+        std::memcpy(buffer, input, size_t(rows)*cols*sizeof(T));
+    }
+
     for (int i = 0; i < regionHeight; ++i) {
         for (int ry = 0; ry < Ry; ++ry) {
             const int lane   = i % Ty; 
             const int srcRow = ry*regionHeight + i;
             const int dstRow = i * Ry - i % Ty; 
 
-            const T* src = input  + size_t(srcRow)*cols;
+            const T* src = buffer  + size_t(srcRow)*cols;
+                  T* dst = output + size_t(dstRow)*cols;
+
+            for (int j = 0; j < cols; j++) {
+                const int srcCol = j;
+                const int dstCol = Ty*Ry*j + ry + lane;
+                dst[dstCol] = src[srcCol];
+            }
+        }
+    } 
+}
+
+template<typename T>
+void applyRyTx(const T* input, T* output, int rows, int cols, int Ry, int Ty, int Tx, char Ly) {
+    const int regionHeight = rows / Ry;
+    
+    std::unique_ptr<T[]> tmp(new T[size_t(rows) * cols]);
+    T* buffer = tmp.get();
+    
+    if(Ly != '\0'){
+        invertYtap(input, buffer, rows, cols, Ry, Ly);
+    } else {
+        std::memcpy(buffer, input, size_t(rows)*cols*sizeof(T));
+    }
+
+    for (int i = 0; i < regionHeight; ++i) {
+        for (int ry = 0; ry < Ry; ++ry) {
+            const int lane   = i % Ty; 
+            const int srcRow = ry*regionHeight + i;
+            const int dstRow = i * Ry - i % Ty; 
+
+            const T* src = buffer  + size_t(srcRow)*cols;
                   T* dst = output + size_t(dstRow)*cols;
 
             for (int j = 0; j < cols/Tx; j++) {
@@ -282,7 +323,6 @@ void applyYtap(const T* input, T* output, int rows, int cols, int& Ry, int& Ty, 
             }
         }
     }
-    Tx = 1; 
 }
 
 template<typename T>
@@ -290,24 +330,23 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
     auto [Rx, Tx, Lx, Ry, Ty, Ly] = readTap(tapType);
     bool hasYtap = (Ry != 1 || Ty != 1 || Ly != '\0');
     bool hasXtap = (Rx != 1 || Tx != 1 || Lx != '\0');
+    bool hasRyTx = (Ry != 1 && Tx != 1);
 
     std::unique_ptr<T[]> tmp(new T[size_t(rows) * cols]);
-    std::unique_ptr<T[]> tmp2(new T[size_t(rows) * cols]);
-    T* bufferX = tmp.get();
-    T* buffer2 = tmp2.get();
+    T* buffer = tmp.get();
 
-    if(Ly != '\0'){
-        invertYtap(input, bufferX, rows, cols, Ry, Ly);
-    } else {
-        std::memcpy(bufferX, input, size_t(rows)*cols*sizeof(T));
+
+    if(hasRyTx){
+        applyRyTx(input, output, rows, cols, Ry, Ty, Tx, Ly);
+        return;
     }
-    applyYtap(bufferX, buffer2, rows, cols, Ry, Ty, Tx);
+
+    applyYtap(input, buffer, rows, cols, Ry, Ty, Ly);
     
-    std::cout << "Tx = " << Tx << std::endl;
     if(Rx != 1 || Tx != 1 || Lx != '\0'){
-        applyXtap(buffer2, output, rows, cols, Rx, Tx, Lx);
+        applyXtap(buffer, output, rows, cols, Rx, Tx, Lx);
     } else {
-        std::memcpy(output, buffer2, size_t(rows)*cols*sizeof(T));
+        std::memcpy(output, buffer, size_t(rows)*cols*sizeof(T));
         return;
     }
     
