@@ -289,7 +289,7 @@ void applyYtap(const T* input, T* output, int rows, int cols, int Ry, int Ty, ch
 }
 
 template<typename T>
-void applyRyTx(const T* input, T* output, int rows, int cols, int Ry, int Ty, int Tx, char Ly) {
+void applyRyTx(const T* input, T* output, int rows, int cols, int Ry, int Ty, int Rx, int Tx, char Ly) {
     const int regionHeight = rows / Ry;
     
     std::unique_ptr<T[]> tmp(new T[size_t(rows) * cols]);
@@ -303,22 +303,24 @@ void applyRyTx(const T* input, T* output, int rows, int cols, int Ry, int Ty, in
 
     for (int i = 0; i < regionHeight; ++i) {
         for (int ry = 0; ry < Ry; ++ry) {
-            const int lane   = i % Ty; 
+            // const int lane   = i % Ty; 
             const int srcRow = ry*regionHeight + i;
             const int dstRow = i * Ry - i % Ty; 
 
             const T* src = buffer  + size_t(srcRow)*cols;
                   T* dst = output + size_t(dstRow)*cols;
 
-            for (int j = 0; j < cols/Tx; j++) {
-                for(int tx = 0; tx < Tx; tx++){
-                    const int srcCol = j*Tx + tx;
-                    const int dstCol = Ty*Ry*j*Tx + Tx*ry + lane + tx;
-                    dst[dstCol] = src[srcCol];
-                    /*if(j < 9 && i < 2) std::cout << 
-                        "(" << i << "," << ry << "," << j << "," << tx << "): " << 
-                        srcCol << " -> " << dstCol << std::endl;
-                    */
+            for(int rx = 0; rx < Rx; rx++){
+                for (int j = 0; j < cols/(Rx*Tx); j++) {
+                    for(int tx = 0; tx < Tx; tx++){
+                        const int srcCol = rx*cols/Rx + j*Tx + tx;
+                        const int dstCol = (Ry*Rx*Tx*Ty)*j + (Rx*ry + rx)*Tx + i%Ty + tx;
+                        dst[dstCol] = src[srcCol];
+                        /*if(j < 9 && i < 2) std::cout << 
+                            "(" << i << "," << ry << "," << rx << "," << j << "): " << 
+                            srcCol << " -> " << dstCol << std::endl;
+                        */
+                    }
                 }
             }
         }
@@ -333,9 +335,10 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
     bool hasXtap = (Rx != 1 || Tx != 1 || Lx != '\0');
     bool hasRyTx = (Ry != 1 && Tx != 1);
     bool hasXYtap = hasYtap && hasXtap;
+    bool hasComplexTap = (Lx != '\0' || Ly != '\0') && hasXYtap;
 
-    if(hasRyTx){
-        applyRyTx(input, output, rows, cols, Ry, Ty, Tx, Ly);
+    if(hasComplexTap){
+        applyRyTx(input, output, rows, cols, Ry, Ty, Rx, Tx, Ly);
         return;
     }
 
