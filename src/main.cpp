@@ -328,25 +328,29 @@ void applyRyTx(const T* input, T* output, int rows, int cols, int Ry, int Ty, in
 template<typename T>
 void applyTap(const T* input, T* output, int rows, int cols, const string& tapType) {
     auto [Rx, Tx, Lx, Ry, Ty, Ly] = readTap(tapType);
+    
     bool hasYtap = (Ry != 1 || Ty != 1 || Ly != '\0');
     bool hasXtap = (Rx != 1 || Tx != 1 || Lx != '\0');
     bool hasRyTx = (Ry != 1 && Tx != 1);
-
-    std::unique_ptr<T[]> tmp(new T[size_t(rows) * cols]);
-    T* buffer = tmp.get();
-
+    bool hasXYtap = hasYtap && hasXtap;
 
     if(hasRyTx){
         applyRyTx(input, output, rows, cols, Ry, Ty, Tx, Ly);
         return;
     }
 
-    applyYtap(input, buffer, rows, cols, Ry, Ty, Ly);
-    
-    if(Rx != 1 || Tx != 1 || Lx != '\0'){
+    if(hasXYtap){            
+        std::unique_ptr<T[]> tmp(new T[size_t(rows) * cols]);
+        T* buffer = tmp.get();
+        applyYtap(input, buffer, rows, cols, Ry, Ty, Ly);
         applyXtap(buffer, output, rows, cols, Rx, Tx, Lx);
+        return;
     } else {
-        std::memcpy(output, buffer, size_t(rows)*cols*sizeof(T));
+        if(hasYtap){
+            applyYtap(input, output, rows, cols, Ry, Ty, Ly);
+            return;
+        }    
+        applyXtap(input, output, rows, cols, Rx, Tx, Lx);
         return;
     }
     
