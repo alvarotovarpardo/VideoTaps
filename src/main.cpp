@@ -243,23 +243,21 @@ void invertYtap(const T* input, T* output, int rows, int cols, int Ry, char Ly) 
         if (Ly=='M') return top;
         return false;
     };
-
     for (int ry = 0; ry < Ry; ++ry) {
         const bool flip = invY(ry);
-        for (int p = 0; p < regionHeight; ++p) {
+        for (int i = 0; i < regionHeight; ++i) {
             const int srcRow = flip
-                ? (ry*regionHeight + (regionHeight - 1 - p))  // espejo vertical dentro de la región
-                : (ry*regionHeight + p);
-            const int dstRow = ry*regionHeight + p;
-            std::memcpy(output + size_t(dstRow)*cols,
-                        input  + size_t(srcRow)*cols,
-                        size_t(cols)*sizeof(T));
+                ? (ry*regionHeight + (regionHeight - 1 - i))  // espejo vertical dentro de la región
+                : (ry*regionHeight + i);
+            const int dstRow = ry*regionHeight + i;
+            std::memcpy(output + size_t(dstRow)*cols, input  + size_t(srcRow)*cols, size_t(cols)*sizeof(T));
+        
         }
     }
 }
 
 template<typename T>
-void applyYtap(const T* input, T* output, int rows, int cols, int Ry, int Ty, char Ly) {
+void applyYtap(const T* input, T* output, int rows, int cols, int& Ry, int& Ty, int& Tx) {
     const int regionHeight = rows / Ry;
     
     for (int i = 0; i < regionHeight; ++i) {
@@ -271,13 +269,20 @@ void applyYtap(const T* input, T* output, int rows, int cols, int Ry, int Ty, ch
             const T* src = input  + size_t(srcRow)*cols;
                   T* dst = output + size_t(dstRow)*cols;
 
-            for (int j = 0; j < cols; j++) {
-                const int srcCol = j;
-                const int dstCol = Ty*Ry*j + ry + lane;
-                dst[dstCol] = src[srcCol];
+            for (int j = 0; j < cols/Tx; j++) {
+                for(int tx = 0; tx < Tx; tx++){
+                    const int srcCol = j*Tx + tx;
+                    const int dstCol = Ty*Ry*j*Tx + Tx*ry + lane + tx;
+                    dst[dstCol] = src[srcCol];
+                    /*if(j < 9 && i < 2) std::cout << 
+                        "(" << i << "," << ry << "," << j << "," << tx << "): " << 
+                        srcCol << " -> " << dstCol << std::endl;
+                    */
+                }
             }
         }
-    } 
+    }
+    Tx = 1; 
 }
 
 template<typename T>
@@ -287,21 +292,25 @@ void applyTap(const T* input, T* output, int rows, int cols, const string& tapTy
     bool hasXtap = (Rx != 1 || Tx != 1 || Lx != '\0');
 
     std::unique_ptr<T[]> tmp(new T[size_t(rows) * cols]);
+    std::unique_ptr<T[]> tmp2(new T[size_t(rows) * cols]);
     T* bufferX = tmp.get();
+    T* buffer2 = tmp2.get();
 
     if(Ly != '\0'){
         invertYtap(input, bufferX, rows, cols, Ry, Ly);
     } else {
         std::memcpy(bufferX, input, size_t(rows)*cols*sizeof(T));
     }
-    applyYtap(bufferX, output, rows, cols, Ry, Ty);
+    applyYtap(bufferX, buffer2, rows, cols, Ry, Ty, Tx);
     
-
+    std::cout << "Tx = " << Tx << std::endl;
     if(Rx != 1 || Tx != 1 || Lx != '\0'){
-        applyXtap(bufferX, output, rows, cols, Rx, Tx, Lx);
+        applyXtap(buffer2, output, rows, cols, Rx, Tx, Lx);
     } else {
+        std::memcpy(output, buffer2, size_t(rows)*cols*sizeof(T));
         return;
     }
+    
 }
 
 cv::Mat normalizeImage(const cv::Mat& img) {
