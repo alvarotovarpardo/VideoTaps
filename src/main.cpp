@@ -246,29 +246,29 @@ void applyXtap(const T* input, T* output, int rows, int cols, int Rx, int Tx, ch
 
     std::unique_ptr<T[]> tmp(new T[size_t(rows) * cols]);
     T* buffer = tmp.get();
-    
-    if(Lx != '\0'){
-        invertXtap(input, buffer, rows, cols, Rx, Tx, Lx);
-    } else {
-        std::memcpy(buffer, input, size_t(rows)*cols*sizeof(T));
-    }
+    std::memcpy(buffer, input, size_t(rows)*cols*sizeof(T));
 
-    for(int i = 0; i < rows; i++){
-        const T* srcRow = buffer + size_t(i) * cols;
-              T* dstRow = output + size_t(i) * cols;
+    for (int i = 0; i < rows; ++i) {
+        const int base = i * cols;
 
-        for(int r = 0; r < Rx; r++){            
-            const T* srcRegion = srcRow + r * regionWidth;
+        for (int r = 0; r < Rx; ++r) {
+            const int dstRegion = base + r * regionWidth;
 
-            for (int j = 0; j < tapsX; j++){
-                const T* srcBlock = srcRegion + j * Tx;
-                      T* dstBlock = dstRow + Tx * (j*Rx + r);
-                
-                for(int tx = 0; tx < Tx; tx++){
-                    dstBlock[tx] = srcBlock[tx];
+            for (int j = 0; j < tapsX; ++j) {
+                const int srcBlock = base + Tx * (j * Rx + r);
+                const int dstBlock = dstRegion + j * Tx;
+
+                for (int tx = 0; tx < Tx; ++tx) {
+                    buffer[dstBlock + tx] = input[srcBlock + tx];
                 }
             }
         }
+    }
+
+    if(Lx != '\0'){
+        invertXtap(buffer, output, rows, cols, Rx, Tx, Lx);
+    } else {
+        std::memcpy(output, buffer, size_t(rows)*cols*sizeof(T));
     }
 }
 
@@ -517,8 +517,8 @@ int main() {
         rows = 480, cols = 640; // .bin
         // Abrimos
         cv::Mat img16;
-        openBinaryFile("C:/CODE/VideoTaps/src/input/" + tapType + ".bin", img16, rows, cols);
-        
+        //openBinaryFile("C:/CODE/VideoTaps/src/input/" + tapType + ".bin", img16, rows, cols);
+        openBinaryFile("C:/CODE/VideoTaps/src/input/clean.bin", img16, rows, cols);
         std::vector<uint16_t> out16(size_t(rows)*cols);
 
         using clock = std::chrono::steady_clock;
