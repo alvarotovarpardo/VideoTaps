@@ -346,33 +346,20 @@ void applyMixTap(const T* input, T* output, int rows, int cols, int Ry, int Ty, 
     T* buffer = tmp.get();
 
 
-    if(hasLy && hasLx){
-        std::unique_ptr<T[]> tmp2(new T[size_t(rows) * cols]);
-        T* buffer2 = tmp2.get();
-        invertYtap(input, buffer2, rows, cols, Ry, Ty, Ly);
-        invertXtap(buffer2, buffer, rows, cols, Rx, Tx, Lx);
-    } else if (hasLy && !hasLx){
-        invertYtap(input, buffer, rows, cols, Ry, Ty, Ly);
-    } else if (hasLx && !hasLy) {
-        invertXtap(input, buffer, rows, cols, Rx, Tx, Lx);
-    } else {
-        std::memcpy(buffer, input, size_t(rows)*cols*sizeof(T));
-    }
-
     for (int i = 0; i < regionHeight; ++i) {
         for (int ry = 0; ry < Ry; ++ry) {
             // const int lane   = i % Ty; 
-            const int srcRow = ry*regionHeight + i;
-            const int dstRow = i * Ry - i % Ty; 
+            const int dstRow = ry*regionHeight + i;
+            const int srcRow = i * Ry - i % Ty; 
 
-            const T* src = buffer  + size_t(srcRow)*cols;
-                  T* dst = output + size_t(dstRow)*cols;
+            const T* src = input  + size_t(srcRow)*cols;
+                  T* dst = buffer + size_t(dstRow)*cols;
 
             for(int rx = 0; rx < Rx; rx++){
                 for (int j = 0; j < cols/(Rx*Tx); j++) {
                     for(int tx = 0; tx < Tx; tx++){
-                        const int srcCol = rx*cols/Rx + j*Tx + tx;
-                        const int dstCol = (Ry*Rx*Tx*Ty)*j + (Rx*ry + rx)*Tx + i%Ty + tx;
+                        const int dstCol = rx*cols/Rx + j*Tx + tx;
+                        const int srcCol = (Ry*Rx*Tx*Ty)*j + (Rx*ry + rx)*Tx + i%Ty + tx;
                         dst[dstCol] = src[srcCol];
                         /*if(j < 9 && i < 2) std::cout << 
                             "(" << i << "," << ry << "," << rx << "," << j << "): " << 
@@ -383,6 +370,22 @@ void applyMixTap(const T* input, T* output, int rows, int cols, int Ry, int Ty, 
             }
         }
     }
+
+
+    if(hasLy && hasLx){
+        std::unique_ptr<T[]> tmp2(new T[size_t(rows) * cols]);
+        T* buffer2 = tmp2.get();
+        invertYtap(buffer, buffer2, rows, cols, Ry, Ty, Ly);
+        invertXtap(buffer2, output, rows, cols, Rx, Tx, Lx);
+    } else if (hasLy && !hasLx){
+        invertYtap(buffer, output, rows, cols, Ry, Ty, Ly);
+    } else if (hasLx && !hasLy) {
+        invertXtap(buffer, output, rows, cols, Rx, Tx, Lx);
+    } else {
+        std::memcpy(buffer, output, size_t(rows)*cols*sizeof(T));
+    }
+
+
 }
 
 template<typename T>
@@ -451,8 +454,8 @@ void saveAndShow(cv::Mat& input, cv::Mat& output, const std::string& tapType){
     cv::imshow("Imagen Original", input);
     cv::imshow("Imagen Reconstruida", output);
     cv::waitKey(0);
-    // cv::imwrite(("Imagen_Original.png"), input);
-    // cv::imwrite((tapType + ".png"), output);
+    cv::imwrite(("Imagen_Original.png"), input);
+    cv::imwrite((tapType + ".png"), output);
 
 }
 
