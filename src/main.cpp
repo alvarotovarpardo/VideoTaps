@@ -309,29 +309,30 @@ void applyYtap(const T* input, T* output, int rows, int cols, int Ry, int Ty, ch
     
     std::unique_ptr<T[]> tmp(new T[size_t(rows) * cols]);
     T* buffer = tmp.get();
-    
-    if(Ly != '\0'){
-        invertYtap(input, buffer, rows, cols, Ry, Ty, Ly);
-    } else {
-        std::memcpy(buffer, input, size_t(rows)*cols*sizeof(T));
-    }
+    std::memcpy(buffer, input, size_t(rows)*cols*sizeof(T));
 
     for (int i = 0; i < regionHeight; ++i) {
+        const int lane   = i % Ty; 
         for (int ry = 0; ry < Ry; ++ry) {
-            const int lane   = i % Ty; 
-            const int srcRow = ry*regionHeight + i;
-            const int dstRow = i * Ry - i % Ty; 
+            const int dstRow = ry*regionHeight + i;
+            const int srcRow = i * Ry - (i % Ty); 
 
-            const T* src = buffer  + size_t(srcRow)*cols;
-                  T* dst = output + size_t(dstRow)*cols;
+            const T* src = input  + size_t(srcRow)*cols;
+                  T* dst = buffer + size_t(dstRow)*cols;
 
             for (int j = 0; j < cols; j++) {
-                const int srcCol = j;
-                const int dstCol = Ty*Ry*j + ry + lane;
+                const int dstCol = j;
+                const int srcCol = Ty*Ry*j + ry + lane;
                 dst[dstCol] = src[srcCol];
             }
         }
     } 
+
+    if(Ly != '\0'){
+        invertYtap(buffer, output, rows, cols, Ry, Ty, Ly);
+    } else {
+        std::memcpy(output, buffer, size_t(rows)*cols*sizeof(T));
+    }
 }
 
 template<typename T>
